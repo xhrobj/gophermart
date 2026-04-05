@@ -11,10 +11,13 @@ jobs:
   go-ci:
     name: Quality checks -> lint, build and test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -32,3 +35,8 @@ jobs:
 
       - name: (^_^) Run tests
         run: go test -race ./...
+
+      - name: (^_^) SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
