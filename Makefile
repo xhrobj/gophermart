@@ -1,7 +1,7 @@
-.PHONY: build \
-		clean \
-		postgres-up postgres-start postgres-stop postgres-rm postgres-connect \
-		run
+.PHONY: run \
+		build clean \
+		lint \
+		postgres-up postgres-start postgres-stop postgres-rm postgres-connect
 
 POSTGRES_USER=gophermart
 POSTGRES_PASSWORD=secret
@@ -12,14 +12,17 @@ POSTGRES_DSN=postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$
 
 APP=cmd/gophermart/gophermart
 
+run: build
+	./$(APP)
+
 build:
 	go build -o $(APP) ./cmd/gophermart
 
 clean:
 	rm -f $(APP)
 
-run: build
-	./$(APP)
+lint:
+	golangci-lint run
 
 postgres-up:
 	docker run --name gophermart-postgres \
