@@ -22,6 +22,7 @@ const (
 	OrderStatusProcessed OrderStatus = "PROCESSED"
 )
 
+// Order описывает заказ, загруженный пользователем в систему Gophermart.
 type Order struct {
 	ID         int64
 	Number     string
@@ -35,13 +36,13 @@ type Order struct {
 type UploadOrderStatus string
 
 const (
-	// Новый заказ, HTTP 202
+	// UploadOrderAccepted означает, что заказ новый и принят в обработку.
 	UploadOrderAccepted UploadOrderStatus = "ACCEPTED"
 
-	// Уже загружен этим пользователем, HTTP 200
+	// UploadOrderDuplicate означает, что этот же пользователь уже загружал заказ.
 	UploadOrderDuplicate UploadOrderStatus = "DUPLICATE"
 
-	// Уже загружен другим пользователем, HTTP 409
+	// UploadOrderConflict означает, что заказ уже был загружен другим пользователем.
 	UploadOrderConflict UploadOrderStatus = "CONFLICT"
 )
 

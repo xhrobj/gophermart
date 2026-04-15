@@ -1,6 +1,6 @@
 # Сервисные интерфейсы
 
-## `AuthService`
+## `AuthService` -> регистрация и логин
 
 ```go
 type AuthService interface {
@@ -12,20 +12,13 @@ type AuthService interface {
 Используется ручками:
 
 - `POST /api/user/register`
-  - метод сервиса: `AuthService.Register`
+  - вызывает: `AuthService.Register`
 - `POST /api/user/login`
-  - метод сервиса: `AuthService.Login`
-
-Используемые таблицы БД:
-
-- `users`
-  - создать пользователя;
-  - найти пользователя по логину;
-  - получить хеш пароля;
+  - вызывает: `AuthService.Login`
 
 ---
 
-## `OrderService`
+## `OrderService` -> загрузка и список заказов пользователя
 
 ```go
 type OrderService interface {
@@ -37,20 +30,13 @@ type OrderService interface {
 Используется ручками:
 
 - `POST /api/user/orders`
-  - метод сервиса: `OrderService.UploadOrder`
+  - вызывает: `OrderService.UploadOrder`
 - `GET /api/user/orders`
-  - метод сервиса: `OrderService.ListOrders`
-
-Используемые таблицы БД:
-
-- `orders`
-  - создать заказ;
-  - проверить владельца заказа;
-  - получить список заказов пользователя;
+  - вызывает: `OrderService.ListOrders`
 
 ---
 
-## `BalanceService`
+## `BalanceService` -> баланс и списания
 
 ```go
 type BalanceService interface {
@@ -63,24 +49,15 @@ type BalanceService interface {
 Используется ручками:
 
 - `GET /api/user/balance`
-  - метод сервиса: `BalanceService.GetBalance`
+  - вызывает: `BalanceService.GetBalance`
 - `POST /api/user/balance/withdraw`
-  - метод сервиса: `BalanceService.Withdraw`
+  - вызывает: `BalanceService.Withdraw`
 - `GET /api/user/withdrawals`
-  - метод сервиса: `BalanceService.ListWithdrawals`
-
-Используемые таблицы БД:
-
-- `orders`
-  - посчитать начисления;
-- `withdrawals`
-  - посчитать списания;
-  - создать новое списание;
-  - получить списания пользователя;
+  - вызывает: `BalanceService.ListWithdrawals`
 
 ---
 
-## `AccrualService`
+## `AccrualService` -> фоновая обработка заказов через accrual
 
 ```go
 type AccrualService interface {
@@ -95,10 +72,3 @@ type AccrualService interface {
 Межсервисный запрос к accrual:
 
 - `GET /api/orders/{number}`
-
-Таблицы БД:
-
-- `orders`
-  - выбрать pending-заказы (статусы `NEW` и `PROCESSING`);
-  - обновить статус;
-  - сохранить начисление;

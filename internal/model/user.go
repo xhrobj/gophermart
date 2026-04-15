@@ -2,6 +2,7 @@ package model
 
 import "time"
 
+// User описывает зарегистрированного пользователя Gophermart.
 type User struct {
 	ID           int64
 	Login        string
