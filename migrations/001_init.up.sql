@@ -1,15 +1,15 @@
-CREATE TYPE order_status AS ENUM (
-    'NEW',
-    'PROCESSING',
-    'INVALID',
-    'PROCESSED'
-);
-
 CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
     login TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TYPE order_status AS ENUM (
+    'NEW',
+    'PROCESSING',
+    'INVALID',
+    'PROCESSED'
 );
 
 CREATE TABLE orders (
