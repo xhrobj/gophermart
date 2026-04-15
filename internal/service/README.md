@@ -4,8 +4,8 @@
 
 ```go
 type AuthService interface {
-    Register(ctx context.Context, login, password string) (model.User, error)
-    Login(ctx context.Context, login, password string) (model.User, error)
+    Register(ctx context.Context, login, password string) (model.AuthResult, error)
+    Login(ctx context.Context, login, password string) (model.AuthResult, error)
 }
 ```
 
@@ -21,7 +21,7 @@ type AuthService interface {
 - `users`
   - создать пользователя;
   - найти пользователя по логину;
-  - получить хеш пароля.
+  - получить хеш пароля;
 
 ---
 
@@ -29,7 +29,7 @@ type AuthService interface {
 
 ```go
 type OrderService interface {
-    UploadOrder(ctx context.Context, userID int64, number string) (model.UploadOrderResult, error)
+    UploadOrder(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error)
     ListOrders(ctx context.Context, userID int64) ([]model.Order, error)
 }
 ```
@@ -67,7 +67,7 @@ type BalanceService interface {
 - `POST /api/user/balance/withdraw`
   - метод сервиса: `BalanceService.Withdraw`
 - `GET /api/user/withdrawals`
-  - метод сервиса: `WithdrawalService.ListWithdrawals`
+  - метод сервиса: `BalanceService.ListWithdrawals`
 
 Используемые таблицы БД:
 
@@ -99,6 +99,6 @@ type AccrualService interface {
 Таблицы БД:
 
 - `orders`
-  - выбрать pending-заказы;
+  - выбрать pending-заказы (статусы `NEW` и `PROCESSING`);
   - обновить статус;
   - сохранить начисление;
