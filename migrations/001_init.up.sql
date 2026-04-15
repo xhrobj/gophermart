@@ -17,7 +17,7 @@ CREATE TABLE orders (
     number TEXT NOT NULL UNIQUE,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     status order_status NOT NULL DEFAULT 'NEW',
-    accrual NUMERIC(19,2) NOT NULL DEFAULT 0,
+    accrual BIGINT NOT NULL DEFAULT 0,
     uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     next_poll_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -33,7 +33,7 @@ CREATE TABLE withdrawals (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     order_number TEXT NOT NULL UNIQUE,
-    amount NUMERIC(19,2) NOT NULL CHECK (amount > 0),
+    amount BIGINT NOT NULL CHECK (amount > 0),
     processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
