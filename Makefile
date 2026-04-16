@@ -16,9 +16,6 @@ ACCRUAL_SYSTEM_ADDRESS=
 APP_PATH=cmd/gophermart/gophermart
 
 run: build
-	./$(APP_PATH)
-
-run: build
 	./$(APP_PATH) \
 		-a $(RUN_ADDRESS) \
 		-d "$(POSTGRES_DSN)" \

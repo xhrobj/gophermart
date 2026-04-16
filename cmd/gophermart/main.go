@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"log"
+	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/xhrobj/gophermart/internal/config"
 )
@@ -14,8 +19,23 @@ func main() {
 
 	log.Printf("(^.^)~ Gophermart will run on %s", cfg.RunAddress)
 
-	if cfg.DatabaseDSN == "" {
-		log.Println("PostgreSQL connection string is empty")
+	if cfg.DatabaseDSN != "" {
+		db, err := sql.Open("pgx", cfg.DatabaseDSN)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer db.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		defer cancel()
+
+		if err := db.PingContext(ctx); err != nil {
+			log.Fatal(err)
+		}
+
+		log.Println("database connected")
+	} else {
+		log.Println("database connection string is empty")
 	}
 
 	if cfg.AccrualSystemAddress == "" {
