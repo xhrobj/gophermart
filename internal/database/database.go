@@ -11,14 +11,14 @@ import (
 )
 
 // Open открывает подключение к PostgreSQL и проверяет доступность базы данных.
-func Open(ctx context.Context, dsn string) (*sql.DB, error) {
-	if dsn == "" {
+func Open(ctx context.Context, databaseDSN string) (*sql.DB, error) {
+	if databaseDSN == "" {
 		return nil, errors.New("database connection string is empty")
 	}
 
 	const driverName = "pgx"
 
-	db, err := sql.Open(driverName, dsn)
+	db, err := sql.Open(driverName, databaseDSN)
 	if err != nil {
 		return nil, fmt.Errorf("connect to PostgreSQL: %w", err)
 	}

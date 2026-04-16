@@ -7,6 +7,7 @@ import (
 
 	"github.com/xhrobj/gophermart/internal/config"
 	"github.com/xhrobj/gophermart/internal/database"
+	"github.com/xhrobj/gophermart/internal/migration"
 )
 
 func main() {
@@ -33,6 +34,12 @@ func run() error {
 	}()
 
 	log.Println("PostgreSQL connection is ready")
+
+	if err := migration.Run(cfg.DatabaseDSN); err != nil {
+		return fmt.Errorf("run database migrations: %w", err)
+	}
+
+	log.Println("database migrations are up to date")
 
 	if cfg.AccrualSystemAddress == "" {
 		log.Println("accrual system address is empty")
