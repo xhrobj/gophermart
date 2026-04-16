@@ -10,16 +10,25 @@ POSTGRES_PORT=5432
 POSTGRES_DB=gophermartdb
 POSTGRES_DSN=postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
 
-APP=cmd/gophermart/gophermart
+RUN_ADDRESS=localhost:8080
+ACCRUAL_SYSTEM_ADDRESS=
+
+APP_PATH=cmd/gophermart/gophermart
 
 run: build
-	./$(APP)
+	./$(APP_PATH)
+
+run: build
+	./$(APP_PATH) \
+		-a $(RUN_ADDRESS) \
+		-d "$(POSTGRES_DSN)" \
+		-r "$(ACCRUAL_SYSTEM_ADDRESS)"
 
 build:
-	go build -o $(APP) ./cmd/gophermart
+	go build -o $(APP_PATH) ./cmd/gophermart
 
 clean:
-	rm -f $(APP)
+	rm -f $(APP_PATH)
 
 lint:
 	golangci-lint run
