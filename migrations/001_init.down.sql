@@ -8,5 +8,3 @@ DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS users;
 
 DROP TYPE IF EXISTS order_status;
-
--- docker exec -i gophermart-postgres psql -U gophermart -d gophermartdb < migrations/001_init.down.sql

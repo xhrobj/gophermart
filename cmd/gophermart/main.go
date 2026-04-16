@@ -11,7 +11,10 @@ import (
 	"github.com/xhrobj/gophermart/internal/config"
 	"github.com/xhrobj/gophermart/internal/database"
 	"github.com/xhrobj/gophermart/internal/handler"
+	"github.com/xhrobj/gophermart/internal/logger"
+	"github.com/xhrobj/gophermart/internal/middleware"
 	"github.com/xhrobj/gophermart/internal/migration"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -23,9 +26,15 @@ func main() {
 func run() error {
 	ctx := context.Background()
 
-	cfg := config.GetConfig()
+	lg, err := logger.New()
+	if err != nil {
+		return fmt.Errorf("create logger: %w", err)
+	}
+	defer func() {
+		_ = lg.Sync()
+	}()
 
-	log.Printf("(^.^)~ Gophermart will run on %s", cfg.RunAddress)
+	cfg := config.GetConfig()
 
 	db, err := database.Open(ctx, cfg.DatabaseDSN)
 	if err != nil {
@@ -33,40 +42,44 @@ func run() error {
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
-			log.Printf("close PostgreSQL connection: %v", err)
+			lg.Error("close PostgreSQL connection", zap.Error(err))
 		}
 	}()
 
-	log.Println("PostgreSQL connection is ready")
+	lg.Info("PostgreSQL connection is ready")
 
 	if err := migration.Run(cfg.DatabaseDSN); err != nil {
 		return fmt.Errorf("run database migrations: %w", err)
 	}
 
-	log.Println("database migrations are up to date")
+	lg.Info("database migrations are up to date")
 
 	if cfg.AccrualSystemAddress == "" {
-		log.Println("accrual system address is empty")
+		lg.Info("accrual system address is empty")
 	} else {
-		log.Printf("accrual system address is configured: %s", cfg.AccrualSystemAddress)
+		lg.Info("accrual system address is configured",
+			zap.String("address", cfg.AccrualSystemAddress),
+		)
 	}
 
 	printBanner()
 
-	return runRouter(cfg.RunAddress, db)
+	return runRouter(cfg.RunAddress, db, lg)
 }
 
-func runRouter(runAddress string, db *sql.DB) error {
+func runRouter(runAddress string, db *sql.DB, lg *zap.Logger) error {
 	router := http.NewServeMux()
-	router.HandleFunc("/ping", handler.DBPing(db))
+	router.HandleFunc("/ping", handler.DBPing(db, lg))
 
 	server := &http.Server{
 		Addr:              runAddress,
-		Handler:           router,
+		Handler:           middleware.WithLogging(lg)(router),
 		ReadHeaderTimeout: time.Second * 5,
 	}
 
-	log.Printf("(^.^)~ Gophermart is starting HTTP server on %s", runAddress)
+	lg.Info("(^.^)~ Gophermart is starting HTTP server",
+		zap.String("address", runAddress),
+	)
 
 	if err := server.ListenAndServe(); err != nil {
 		return fmt.Errorf("run HTTP server: %w", err)

@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"net/http"
 	"time"
+
+	"go.uber.org/zap"
 )
 
-// Ping возвращает handler для проверки доступности PostgreSQL.
-func DBPing(db *sql.DB) http.HandlerFunc {
+// DBPing возвращает handler для проверки доступности PostgreSQL.
+func DBPing(db *sql.DB, log *zap.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -19,6 +21,8 @@ func DBPing(db *sql.DB) http.HandlerFunc {
 		defer cancel()
 
 		if err := db.PingContext(ctx); err != nil {
+			log.Error("PostgreSQL ping failed", zap.Error(err))
+
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

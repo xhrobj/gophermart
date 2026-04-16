@@ -39,5 +39,3 @@ CREATE TABLE withdrawals (
 
 CREATE INDEX idx_withdrawals_user_processed_at
     ON withdrawals (user_id, processed_at DESC);
-
--- docker exec -i gophermart-postgres psql -U gophermart -d gophermartdb < migrations/001_init.up.sql
