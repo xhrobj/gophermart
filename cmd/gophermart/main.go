@@ -13,6 +13,12 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	printBanner()
 
 	cfg := config.GetConfig()
@@ -22,18 +28,22 @@ func main() {
 	if cfg.DatabaseDSN != "" {
 		db, err := sql.Open("pgx", cfg.DatabaseDSN)
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("connect to PostgreSQL: %w", err)
 		}
-		defer db.Close()
+		defer func() {
+			if err := db.Close(); err != nil {
+				log.Printf("close PostgreSQL connection: %v", err)
+			}
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 		defer cancel()
 
 		if err := db.PingContext(ctx); err != nil {
-			log.Fatal(err)
+			return err
 		}
 
-		log.Println("database connected")
+		log.Println("PostgreSQL connected")
 	} else {
 		log.Println("database connection string is empty")
 	}
@@ -43,6 +53,8 @@ func main() {
 	} else {
 		log.Printf("accrual system address is configured: %s", cfg.AccrualSystemAddress)
 	}
+
+	return nil
 }
 
 func printBanner() {
