@@ -2,14 +2,11 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
-	"time"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/xhrobj/gophermart/internal/config"
+	"github.com/xhrobj/gophermart/internal/database"
 )
 
 func main() {
@@ -19,40 +16,31 @@ func main() {
 }
 
 func run() error {
-	printBanner()
+	ctx := context.Background()
 
 	cfg := config.GetConfig()
 
 	log.Printf("(^.^)~ Gophermart will run on %s", cfg.RunAddress)
 
-	if cfg.DatabaseDSN != "" {
-		db, err := sql.Open("pgx", cfg.DatabaseDSN)
-		if err != nil {
-			return fmt.Errorf("connect to PostgreSQL: %w", err)
-		}
-		defer func() {
-			if err := db.Close(); err != nil {
-				log.Printf("close PostgreSQL connection: %v", err)
-			}
-		}()
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-		defer cancel()
-
-		if err := db.PingContext(ctx); err != nil {
-			return err
-		}
-
-		log.Println("PostgreSQL connected")
-	} else {
-		log.Println("database connection string is empty")
+	db, err := database.Open(ctx, cfg.DatabaseDSN)
+	if err != nil {
+		return fmt.Errorf("connect to PostgreSQL: %w", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("close PostgreSQL connection: %v", err)
+		}
+	}()
+
+	log.Println("PostgreSQL connection is ready")
 
 	if cfg.AccrualSystemAddress == "" {
 		log.Println("accrual system address is empty")
 	} else {
 		log.Printf("accrual system address is configured: %s", cfg.AccrualSystemAddress)
 	}
+
+	printBanner()
 
 	return nil
 }
