@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/xhrobj/gophermart/internal/config"
 	"github.com/xhrobj/gophermart/internal/database"
+	"github.com/xhrobj/gophermart/internal/handler"
 	"github.com/xhrobj/gophermart/internal/migration"
 )
 
@@ -48,6 +52,25 @@ func run() error {
 	}
 
 	printBanner()
+
+	return runRouter(cfg.RunAddress, db)
+}
+
+func runRouter(runAddress string, db *sql.DB) error {
+	router := http.NewServeMux()
+	router.HandleFunc("/ping", handler.DBPing(db))
+
+	server := &http.Server{
+		Addr:              runAddress,
+		Handler:           router,
+		ReadHeaderTimeout: time.Second * 5,
+	}
+
+	log.Printf("(^.^)~ Gophermart is starting HTTP server on %s", runAddress)
+
+	if err := server.ListenAndServe(); err != nil {
+		return fmt.Errorf("run HTTP server: %w", err)
+	}
 
 	return nil
 }
