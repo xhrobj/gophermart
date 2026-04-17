@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/xhrobj/gophermart/internal/auth"
 	"github.com/xhrobj/gophermart/internal/model"
@@ -26,16 +28,13 @@ type AuthService interface {
 // authService реализует сценарии регистрации и аутентификации пользователей.
 type authService struct {
 
-	// 1. при регистрации сделать hash / при логине проверить пароль
-	passwordManager auth.PasswordManager
-
-	// 2. создать пользователя / найти пользователя по логину
+	// создать пользователя / найти пользователя по логину
 	userRepo repository.UserRepository
 
-	// NOTE: по ТЗ после успешной регистрации должна происходить автоматическая аутентификация,
-	// значит и register, и login должны в итоге возвращать bearer-токен
+	// при регистрации сделать hash / при логине проверить пароль
+	passwordManager auth.PasswordManager
 
-	// 3. выдать токен после успешного register / login
+	// выдать токен после успешного register / login
 	tokenManager auth.TokenManager
 }
 
@@ -52,36 +51,99 @@ func NewAuthService(
 	}
 }
 
+// Register регистрирует нового пользователя и выдаёт токен аутентификации.
 func (s *authService) Register(ctx context.Context, login, password string) (model.AuthResult, error) {
 
 	// 1. получили login, password
+
+	login = strings.TrimSpace(login)
+
 	// 2. проверили что они не пустые
+
+	if login == "" || password == "" {
+		return model.AuthResult{}, ErrInvalidCredentials
+	}
+
 	// 3. захешировали пароль
+
+	passwordHash, err := s.passwordManager.Hash(password)
+	if err != nil {
+		return model.AuthResult{}, fmt.Errorf("hash password: %w", err)
+	}
+
 	// 4. попросили userRepo.Create(...) создать пользователя
-	//    -> если логин уже занят — вернули ErrLoginAlreadyExists
-	//    -> если пользователь создался — сгенерировали jwt
+
+	user, err := s.userRepo.Create(ctx, login, passwordHash)
+
+	// -> если логин уже занят — вернули ErrLoginAlreadyExists
+
+	if err != nil {
+		if errors.Is(err, repository.ErrUserAlreadyExists) {
+			return model.AuthResult{}, ErrLoginAlreadyExists
+		}
+
+		return model.AuthResult{}, fmt.Errorf("create user: %w", err)
+	}
+
+	// -> если пользователь создался — сгенерировали jwt
+
+	token, err := s.tokenManager.Generate(user.ID)
+	if err != nil {
+		return model.AuthResult{}, fmt.Errorf("generate token: %w", err)
+	}
+
 	// 5. вернули AuthResult
 
 	return model.AuthResult{
-		UserID: 0,
-		Token:  "",
+		UserID: user.ID,
+		Token:  token,
 	}, nil
 }
 
-// Login
-
+// Login аутентифицирует пользователя по логину и паролю.
 func (s *authService) Login(ctx context.Context, login, password string) (model.AuthResult, error) {
 	// 1. получили login, password
+
+	login = strings.TrimSpace(login)
+
 	// 2. проверили что они не пустые
+
+	if login == "" || password == "" {
+		return model.AuthResult{}, ErrInvalidCredentials
+	}
+
 	// 3. нашли пользователя по логину
-	//    -> если не найден — ErrInvalidCredentials
+
+	user, err := s.userRepo.FindByLogin(ctx, login)
+
+	// -> если не найден — ErrInvalidCredentials
+
+	if err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			return model.AuthResult{}, ErrInvalidCredentials
+		}
+
+		return model.AuthResult{}, fmt.Errorf("find user by login: %w", err)
+	}
+
 	// 4. проверили пароль через passwordManager.Check(...)
-	//    -> если пароль неверный — ErrInvalidCredentials
-	//    -> если все ок — сгенерировали jwt
+	// -> если пароль неверный — ErrInvalidCredentials
+
+	if err := s.passwordManager.Check(password, user.PasswordHash); err != nil {
+		return model.AuthResult{}, ErrInvalidCredentials
+	}
+
+	// -> если все ок — сгенерировали jwt
+
+	token, err := s.tokenManager.Generate(user.ID)
+	if err != nil {
+		return model.AuthResult{}, fmt.Errorf("generate token: %w", err)
+	}
+
 	// 5. вернули AuthResult
 
 	return model.AuthResult{
-		UserID: 0,
-		Token:  "",
+		UserID: user.ID,
+		Token:  token,
 	}, nil
 }

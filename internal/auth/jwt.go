@@ -13,7 +13,7 @@ import (
 // подписан неподходящим ключом или не содержит корректный идентификатор пользователя.
 var ErrInvalidToken = errors.New("invalid token")
 
-// jwtClaims содержит пользовательские и стандартные claims JWT-токена.
+// authClaims содержит пользовательские и стандартные claims JWT-токена.
 type authClaims struct {
 	UserID int64 `json:"uid"`
 	jwt.RegisteredClaims
