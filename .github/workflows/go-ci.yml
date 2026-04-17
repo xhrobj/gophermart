@@ -34,7 +34,7 @@ jobs:
         run: make build
 
       - name: (^_^) Run tests
-        run: go test -race ./...
+        run: make test-race
 
       - name: (^_^) SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v7

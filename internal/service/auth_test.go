@@ -16,10 +16,16 @@ type stubUserRepo struct {
 }
 
 func (s *stubUserRepo) Create(ctx context.Context, login, passwordHash string) (model.User, error) {
+	if s.createFunc == nil {
+		panic("unexpected call to stubUserRepo.Create")
+	}
 	return s.createFunc(ctx, login, passwordHash)
 }
 
 func (s *stubUserRepo) FindByLogin(ctx context.Context, login string) (model.User, error) {
+	if s.findByLoginFunc == nil {
+		panic("unexpected call to stubUserRepo.FindByLogin")
+	}
 	return s.findByLoginFunc(ctx, login)
 }
 
@@ -29,10 +35,16 @@ type stubPasswordManager struct {
 }
 
 func (s *stubPasswordManager) Hash(password string) (string, error) {
+	if s.hashFunc == nil {
+		panic("unexpected call to stubPasswordManager.Hash")
+	}
 	return s.hashFunc(password)
 }
 
 func (s *stubPasswordManager) Check(password, hash string) error {
+	if s.checkFunc == nil {
+		panic("unexpected call to stubPasswordManager.Check")
+	}
 	return s.checkFunc(password, hash)
 }
 
@@ -42,14 +54,22 @@ type stubTokenManager struct {
 }
 
 func (s *stubTokenManager) Generate(userID int64) (string, error) {
+	if s.generateFunc == nil {
+		panic("unexpected call to stubTokenManager.Generate")
+	}
 	return s.generateFunc(userID)
 }
 
 func (s *stubTokenManager) Parse(token string) (int64, error) {
+	if s.parseFunc == nil {
+		panic("unexpected call to stubTokenManager.Parse")
+	}
 	return s.parseFunc(token)
 }
 
 func TestAuthService_Register_OK(t *testing.T) {
+	t.Parallel()
+
 	userRepo := &stubUserRepo{
 		createFunc: func(ctx context.Context, login, passwordHash string) (model.User, error) {
 			require.Equal(t, "admin", login)
@@ -88,6 +108,8 @@ func TestAuthService_Register_OK(t *testing.T) {
 }
 
 func TestAuthService_Register_InvalidAuthInput(t *testing.T) {
+	t.Parallel()
+
 	userRepo := &stubUserRepo{}
 	passwordManager := &stubPasswordManager{}
 	tokenManager := &stubTokenManager{}
@@ -99,6 +121,8 @@ func TestAuthService_Register_InvalidAuthInput(t *testing.T) {
 }
 
 func TestAuthService_Register_LoginAlreadyExists(t *testing.T) {
+	t.Parallel()
+
 	userRepo := &stubUserRepo{
 		createFunc: func(ctx context.Context, login, passwordHash string) (model.User, error) {
 			return model.User{}, repository.ErrUserAlreadyExists
@@ -120,6 +144,8 @@ func TestAuthService_Register_LoginAlreadyExists(t *testing.T) {
 }
 
 func TestAuthService_Login_OK(t *testing.T) {
+	t.Parallel()
+
 	userRepo := &stubUserRepo{
 		findByLoginFunc: func(ctx context.Context, login string) (model.User, error) {
 			require.Equal(t, "admin", login)
@@ -158,6 +184,8 @@ func TestAuthService_Login_OK(t *testing.T) {
 }
 
 func TestAuthService_Login_InvalidAuthInput(t *testing.T) {
+	t.Parallel()
+
 	userRepo := &stubUserRepo{}
 	passwordManager := &stubPasswordManager{}
 	tokenManager := &stubTokenManager{}
@@ -169,6 +197,8 @@ func TestAuthService_Login_InvalidAuthInput(t *testing.T) {
 }
 
 func TestAuthService_Login_UserNotFound(t *testing.T) {
+	t.Parallel()
+
 	userRepo := &stubUserRepo{
 		findByLoginFunc: func(ctx context.Context, login string) (model.User, error) {
 			return model.User{}, repository.ErrUserNotFound
@@ -185,6 +215,8 @@ func TestAuthService_Login_UserNotFound(t *testing.T) {
 }
 
 func TestAuthService_Login_InvalidCredentials(t *testing.T) {
+	t.Parallel()
+
 	userRepo := &stubUserRepo{
 		findByLoginFunc: func(ctx context.Context, login string) (model.User, error) {
 			return model.User{
