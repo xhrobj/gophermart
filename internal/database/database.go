@@ -20,7 +20,7 @@ func Open(ctx context.Context, databaseDSN string) (*sql.DB, error) {
 
 	db, err := sql.Open(driverName, databaseDSN)
 	if err != nil {
-		return nil, fmt.Errorf("connect to PostgreSQL: %w", err)
+		return nil, fmt.Errorf("open PostgreSQL: %w", err)
 	}
 
 	pingCtx, cancel := context.WithTimeout(ctx, time.Second*3)

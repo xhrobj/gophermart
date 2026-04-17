@@ -2,8 +2,14 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/xhrobj/gophermart/internal/model"
+)
+
+var (
+	ErrUserNotFound      = errors.New("user not found")
+	ErrUserAlreadyExists = errors.New("user already exists")
 )
 
 // UserRepository описывает операции хранения пользователей.

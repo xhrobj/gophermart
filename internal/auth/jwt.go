@@ -9,10 +9,12 @@ import (
 )
 
 // ErrInvalidToken означает, что токен нельзя использовать для аутентификации.
-// Если токен: битый, просроченный, подписан не тем ключом, неправильного формата, без userID
+// Ошибка возвращается, если токен поврежден, просрочен, имеет неверный формат,
+// подписан неподходящим ключом или не содержит корректный идентификатор пользователя.
 var ErrInvalidToken = errors.New("invalid token")
 
-type jwtClaims struct {
+// jwtClaims содержит пользовательские и стандартные claims JWT-токена.
+type authClaims struct {
 	UserID int64 `json:"uid"`
 	jwt.RegisteredClaims
 }
@@ -35,7 +37,7 @@ func NewJWTTokenManager(secret string, ttl time.Duration) *JWTTokenManager {
 func (m *JWTTokenManager) Generate(userID int64) (string, error) {
 	now := time.Now()
 
-	claims := jwtClaims{
+	claims := authClaims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -55,7 +57,7 @@ func (m *JWTTokenManager) Generate(userID int64) (string, error) {
 
 // Parse проверяет JWT-токен и возвращает идентификатор пользователя из claims.
 func (m *JWTTokenManager) Parse(tokenString string) (int64, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &jwtClaims{}, func(token *jwt.Token) (any, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &authClaims{}, func(token *jwt.Token) (any, error) {
 		if token.Method != jwt.SigningMethodHS256 {
 			return nil, ErrInvalidToken
 		}
@@ -66,7 +68,7 @@ func (m *JWTTokenManager) Parse(tokenString string) (int64, error) {
 		return 0, ErrInvalidToken
 	}
 
-	claims, ok := token.Claims.(*jwtClaims)
+	claims, ok := token.Claims.(*authClaims)
 	if !ok {
 		return 0, ErrInvalidToken
 	}
