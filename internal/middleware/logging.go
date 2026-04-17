@@ -33,7 +33,7 @@ func (w *loggingResponseWriter) Write(data []byte) (int, error) {
 	return size, err
 }
 
-// Logging возвращает middleware для логирования HTTP-запросов.
+// WithLogging возвращает middleware для логирования HTTP-запросов.
 func WithLogging(logger *zap.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
