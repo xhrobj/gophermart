@@ -15,6 +15,9 @@ type Config struct {
 
 	// AccrualSystemAddress содержит адрес внешней системы расчёта начислений.
 	AccrualSystemAddress string
+
+	// JWTSecret содержит секрет для подписи JWT-токенов.
+	JWTSecret string
 }
 
 // GetConfig возвращает конфигурацию сервиса Gophermart.
@@ -23,12 +26,15 @@ type Config struct {
 //   - флаги: -a -d -r
 //   - переменные окружения: RUN_ADDRESS, DATABASE_URI, ACCRUAL_SYSTEM_ADDRESS
 //
-// Приоритет источников: flag > env > default.
+// Приоритет источников:
+//   - для RunAddress, DatabaseDSN и AccrualSystemAddress: flag > env > default
+//   - для JWTSecret: env > default
 func GetConfig() Config {
 	cfg := Config{
 		RunAddress:           "localhost:8080",
 		DatabaseDSN:          "",
 		AccrualSystemAddress: "",
+		JWTSecret:            "dev-secret",
 	}
 
 	flag.StringVar(&cfg.RunAddress, "a", cfg.RunAddress, "address and port to run server")
@@ -59,6 +65,11 @@ func GetConfig() Config {
 		if accrualSystemAddress, ok := os.LookupEnv("ACCRUAL_SYSTEM_ADDRESS"); ok {
 			cfg.AccrualSystemAddress = accrualSystemAddress
 		}
+	}
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret != "" {
+		cfg.JWTSecret = jwtSecret
 	}
 
 	return cfg
