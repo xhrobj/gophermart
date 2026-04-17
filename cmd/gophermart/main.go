@@ -8,12 +8,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/xhrobj/gophermart/internal/auth"
 	"github.com/xhrobj/gophermart/internal/config"
 	"github.com/xhrobj/gophermart/internal/database"
 	"github.com/xhrobj/gophermart/internal/handler"
 	"github.com/xhrobj/gophermart/internal/logger"
 	"github.com/xhrobj/gophermart/internal/middleware"
 	"github.com/xhrobj/gophermart/internal/migration"
+	"github.com/xhrobj/gophermart/internal/repository"
+	"github.com/xhrobj/gophermart/internal/service"
 	"go.uber.org/zap"
 )
 
@@ -64,12 +67,21 @@ func run() error {
 
 	printBanner()
 
-	return runRouter(cfg.RunAddress, db, lg)
+	userRepo := repository.NewPostgresUserRepository(db)
+	passwordManager := auth.NewSHA256PasswordManager()
+	tokenManager := auth.NewJWTTokenManager(cfg.JWTSecret, 24*time.Hour)
+	authService := service.NewAuthService(userRepo, passwordManager, tokenManager)
+
+	return runRouter(cfg.RunAddress, db, authService, lg)
 }
 
-func runRouter(runAddress string, db *sql.DB, lg *zap.Logger) error {
+func runRouter(runAddress string, db *sql.DB, authService service.AuthService, lg *zap.Logger) error {
 	router := http.NewServeMux()
+
 	router.HandleFunc("/ping", handler.DBPing(db, lg))
+
+	router.HandleFunc("/api/user/register", handler.Register(authService))
+	router.HandleFunc("/api/user/login", handler.Login(authService))
 
 	server := &http.Server{
 		Addr:              runAddress,
