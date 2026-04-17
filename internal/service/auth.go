@@ -12,6 +12,7 @@ import (
 )
 
 var (
+	ErrInvalidAuthInput   = errors.New("invalid auth input")
 	ErrLoginAlreadyExists = errors.New("login already exists")
 	ErrInvalidCredentials = errors.New("invalid credentials")
 )
@@ -60,8 +61,8 @@ func (s *authService) Register(ctx context.Context, login, password string) (mod
 
 	// 2. проверили что они не пустые
 
-	if login == "" || password == "" {
-		return model.AuthResult{}, ErrInvalidCredentials
+	if login == "" || password == "" || strings.TrimSpace(password) == "" {
+		return model.AuthResult{}, ErrInvalidAuthInput
 	}
 
 	// 3. захешировали пароль
@@ -109,7 +110,7 @@ func (s *authService) Login(ctx context.Context, login, password string) (model.
 	// 2. проверили что они не пустые
 
 	if login == "" || password == "" {
-		return model.AuthResult{}, ErrInvalidCredentials
+		return model.AuthResult{}, ErrInvalidAuthInput
 	}
 
 	// 3. нашли пользователя по логину

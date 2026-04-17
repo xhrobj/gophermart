@@ -1,6 +1,6 @@
 .PHONY: run \
 		build clean \
-		lint \
+		test lint \
 		postgres-up postgres-start postgres-stop postgres-rm postgres-connect
 
 POSTGRES_USER=gophermart
@@ -26,6 +26,9 @@ build:
 
 clean:
 	rm -f $(APP_PATH)
+
+test:
+	go test ./...
 
 lint:
 	golangci-lint run
