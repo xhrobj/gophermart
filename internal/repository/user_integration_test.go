@@ -30,6 +30,10 @@ func openTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("pgx", dsn)
 	require.NoError(t, err)
 
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
 	err = db.Ping()
 	require.NoError(t, err)
 
@@ -91,7 +95,7 @@ func TestPostgresUserRepository_FindByLogin_OK(t *testing.T) {
 	require.Equal(t, created.CreatedAt, got.CreatedAt)
 }
 
-func TestPostgresUserRepository_FindByLogin_User404(t *testing.T) {
+func TestPostgresUserRepository_FindByLogin_UserNotFound(t *testing.T) {
 	db := openTestDB(t)
 	truncateUsers(t, db)
 
