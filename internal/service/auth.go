@@ -52,7 +52,6 @@ func NewAuthService(
 	}
 }
 
-// Register регистрирует нового пользователя и выдаёт токен аутентификации.
 func (s *authService) Register(ctx context.Context, login, password string) (model.AuthResult, error) {
 
 	// 1. получили login, password
@@ -101,7 +100,6 @@ func (s *authService) Register(ctx context.Context, login, password string) (mod
 	}, nil
 }
 
-// Login аутентифицирует пользователя по логину и паролю.
 func (s *authService) Login(ctx context.Context, login, password string) (model.AuthResult, error) {
 	// 1. получили login, password
 

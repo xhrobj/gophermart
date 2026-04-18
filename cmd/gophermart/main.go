@@ -70,7 +70,10 @@ func run() error {
 	tokenManager := auth.NewJWTTokenManager(cfg.JWTSecret, 24*time.Hour)
 	authService := service.NewAuthService(userRepo, passwordManager, tokenManager)
 
-	appRouter := router.New(authService, tokenManager, lg)
+	orderRepo := repository.NewPostgresOrderRepository(db)
+	orderService := service.NewOrderService(orderRepo)
+
+	appRouter := router.New(authService, orderService, tokenManager, lg)
 
 	lg.Info("(^.^)~ Gophermart is starting HTTP server",
 		zap.String("address", cfg.RunAddress),

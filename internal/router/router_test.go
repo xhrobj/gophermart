@@ -36,6 +36,27 @@ func (s *stubAuthService) Login(ctx context.Context, login, password string) (mo
 	return s.loginFunc(ctx, login, password)
 }
 
+type stubOrderService struct {
+	uploadOrderFunc func(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error)
+	listOrdersFunc  func(ctx context.Context, userID int64) ([]model.Order, error)
+}
+
+func (s *stubOrderService) UploadOrder(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error) {
+	if s.uploadOrderFunc == nil {
+		panic("unexpected call to stubOrderService.UploadOrder")
+	}
+
+	return s.uploadOrderFunc(ctx, userID, orderNumber)
+}
+
+func (s *stubOrderService) ListOrders(ctx context.Context, userID int64) ([]model.Order, error) {
+	if s.listOrdersFunc == nil {
+		panic("unexpected call to stubOrderService.ListOrders")
+	}
+
+	return s.listOrdersFunc(ctx, userID)
+}
+
 type stubTokenManager struct {
 	generateFunc func(userID int64) (string, error)
 	parseFunc    func(token string) (int64, error)
@@ -57,8 +78,8 @@ func (s *stubTokenManager) Parse(token string) (int64, error) {
 	return s.parseFunc(token)
 }
 
-func newTestRouter(authService service.AuthService) http.Handler {
-	return New(authService, &stubTokenManager{}, zap.NewNop())
+func newTestRouter(authService service.AuthService, orderService service.OrderService) http.Handler {
+	return New(authService, orderService, &stubTokenManager{}, zap.NewNop())
 }
 
 func TestRegister_OK(t *testing.T) {
@@ -74,7 +95,7 @@ func TestRegister_OK(t *testing.T) {
 		},
 	}
 
-	r := newTestRouter(authService)
+	r := newTestRouter(authService, &stubOrderService{})
 
 	rq := httptest.NewRequest(
 		http.MethodPost,
@@ -102,7 +123,7 @@ func TestRegister_LoginAlreadyExists(t *testing.T) {
 		},
 	}
 
-	r := newTestRouter(authService)
+	r := newTestRouter(authService, &stubOrderService{})
 
 	rq := httptest.NewRequest(
 		http.MethodPost,
@@ -135,7 +156,7 @@ func TestLogin_OK(t *testing.T) {
 		},
 	}
 
-	r := newTestRouter(authService)
+	r := newTestRouter(authService, &stubOrderService{})
 
 	rq := httptest.NewRequest(
 		http.MethodPost,
@@ -163,7 +184,7 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 		},
 	}
 
-	r := newTestRouter(authService)
+	r := newTestRouter(authService, &stubOrderService{})
 
 	rq := httptest.NewRequest(
 		http.MethodPost,
@@ -187,7 +208,7 @@ func TestGetOrders_Unauthorized(t *testing.T) {
 	authService := &stubAuthService{}
 	tokenManager := &stubTokenManager{}
 
-	r := New(authService, tokenManager, zap.NewNop())
+	r := New(authService, &stubOrderService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
 	rec := httptest.NewRecorder()
@@ -212,7 +233,7 @@ func TestGetOrders_OK(t *testing.T) {
 		},
 	}
 
-	r := New(authService, tokenManager, zap.NewNop())
+	r := New(authService, &stubOrderService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
 	rq.Header.Set("Authorization", "Bearer good-token")
@@ -243,7 +264,7 @@ func TestGetOrders_InvalidToken(t *testing.T) {
 		},
 	}
 
-	r := New(authService, tokenManager, zap.NewNop())
+	r := New(authService, &stubOrderService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
 	rq.Header.Set("Authorization", "Bearer bad-token")

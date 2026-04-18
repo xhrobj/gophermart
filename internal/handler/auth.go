@@ -8,41 +8,12 @@ import (
 	"github.com/xhrobj/gophermart/internal/service"
 )
 
+// authRequest описывает JSON-запрос с логином и паролем
+// для регистрации или аутентификации пользователя.
 type authRequest struct {
 	Login    string `json:"login"`
 	Password string `json:"password"`
 }
-
-/*
-
-#### **Регистрация пользователя**
-
-Хендлер: `POST /api/user/register`.
-
-Регистрация производится по паре логин/пароль. Каждый логин должен быть уникальным.
-После успешной регистрации должна происходить автоматическая аутентификация пользователя.
-
-Формат запроса:
-
-```
-POST /api/user/register HTTP/1.1
-Content-Type: application/json
-...
-
-{
-	"login": "<login>",
-	"password": "<password>"
-}
-```
-
-Возможные коды ответа:
-
-- `200` — пользователь успешно зарегистрирован и аутентифицирован;
-- `400` — неверный формат запроса;
-- `409` — логин уже занят;
-- `500` — внутренняя ошибка сервера.
-
-*/
 
 /*
 
@@ -52,6 +23,16 @@ curl -i -X POST http://localhost:8080/api/user/register \
 
 */
 
+// Register возвращает HTTP-хендлер для регистрации пользователя.
+//
+// Хендлер принимает JSON с логином и паролем, вызывает AuthService.Register
+// и в случае успеха возвращает JWT-токен в заголовке Authorization.
+//
+// Возможные коды ответа:
+//   - 200 -> пользователь успешно зарегистрирован и аутентифицирован
+//   - 400 -> неверный формат запроса
+//   - 409 -> логин уже занят
+//   - 500 -> внутренняя ошибка сервера
 func Register(authService service.AuthService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -86,42 +67,22 @@ func Register(authService service.AuthService) http.HandlerFunc {
 
 /*
 
-#### **Аутентификация пользователя**
-
-Хендлер: `POST /api/user/login`.
-
-Аутентификация производится по паре логин/пароль.
-
-Формат запроса:
-
-```
-POST /api/user/login HTTP/1.1
-Content-Type: application/json
-...
-
-{
-	"login": "<login>",
-	"password": "<password>"
-}
-```
-
-Возможные коды ответа:
-
-- `200` — пользователь успешно аутентифицирован;
-- `400` — неверный формат запроса;
-- `401` — неверная пара логин/пароль;
-- `500` — внутренняя ошибка сервера.
-
-*/
-
-/*
-
 curl -i -X POST http://localhost:8080/api/user/login \
   -H "Content-Type: application/json" \
   -d '{"login": "admin","password": "god"}'
 
 */
 
+// Login возвращает HTTP-хендлер для аутентификации пользователя.
+//
+// Хендлер принимает JSON с логином и паролем, вызывает AuthService.Login
+// и в случае успеха возвращает JWT-токен в заголовке Authorization.
+//
+// Возможные коды ответа:
+//   - 200 -> пользователь успешно аутентифицирован
+//   - 400 -> неверный формат запроса
+//   - 401 -> неверная пара логин/пароль
+//   - 500 -> внутренняя ошибка сервера
 func Login(authService service.AuthService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

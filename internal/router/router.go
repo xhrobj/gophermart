@@ -12,7 +12,12 @@ import (
 )
 
 // New собирает HTTP-роутер приложения.
-func New(authService service.AuthService, tokenManager auth.TokenManager, lg *zap.Logger) http.Handler {
+func New(
+	authService service.AuthService,
+	orderService service.OrderService,
+	tokenManager auth.TokenManager,
+	lg *zap.Logger,
+) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.WithLogging(lg))
@@ -25,6 +30,7 @@ func New(authService service.AuthService, tokenManager auth.TokenManager, lg *za
 		// Защищенные маршруты
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.WithAuth(tokenManager))
+			r.Post("/orders", handler.UploadOrder(orderService))
 			r.Get("/orders", handler.GetOrders())
 		})
 	})

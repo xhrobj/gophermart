@@ -1,11 +1,151 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/xhrobj/gophermart/internal/middleware"
+	"github.com/xhrobj/gophermart/internal/model"
+	"github.com/xhrobj/gophermart/internal/service"
 )
+
+/*
+
+#### **Загрузка номера заказа**
+
+Хендлер: `POST /api/user/orders`.
+
+Хендлер доступен только аутентифицированным пользователям. Номером заказа является последовательность цифр произвольной длины.
+
+Номер заказа может быть проверен на корректность ввода с помощью [алгоритма Луна](https://ru.wikipedia.org/wiki/Алгоритм_Луна){target="_blank"}.
+
+Формат запроса:
+
+```
+POST /api/user/orders HTTP/1.1
+Content-Type: text/plain
+...
+
+12345678903
+```
+
+Возможные коды ответа:
+
+- `200` — номер заказа уже был загружен этим пользователем;
+- `202` — новый номер заказа принят в обработку;
+- `400` — неверный формат запроса;
+- `401` — пользователь не аутентифицирован;
+- `409` — номер заказа уже был загружен другим пользователем;
+- `422` — неверный формат номера заказа;
+- `500` — внутренняя ошибка сервера.
+
+*/
+
+func UploadOrder(orderService service.OrderService) http.HandlerFunc {
+	return func(w http.ResponseWriter, rq *http.Request) {
+		if rq.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		userID, ok := middleware.UserIDFromContext(rq.Context())
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		body, err := io.ReadAll(rq.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		result, err := orderService.UploadOrder(rq.Context(), userID, string(body))
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrInvalidOrderInput):
+				w.WriteHeader(http.StatusBadRequest)
+			case errors.Is(err, service.ErrInvalidOrderNumber):
+				w.WriteHeader(http.StatusUnprocessableEntity)
+			default:
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+			return
+		}
+
+		switch result.Status {
+		case model.UploadOrderAccepted:
+			w.WriteHeader(http.StatusAccepted)
+		case model.UploadOrderDuplicate:
+			w.WriteHeader(http.StatusOK)
+		case model.UploadOrderConflict:
+			w.WriteHeader(http.StatusConflict)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}
+}
+
+/*
+
+#### **Получение списка загруженных номеров заказов**
+
+Хендлер: `GET /api/user/orders`.
+
+Хендлер доступен только авторизованному пользователю. Номера заказа в выдаче должны быть отсортированы по времени загрузки от самых новых к самым старым. Формат даты — RFC3339.
+
+Доступные статусы обработки расчётов:
+
+- `NEW` — заказ загружен в систему, но не попал в обработку;
+- `PROCESSING` — вознаграждение за заказ рассчитывается;
+- `INVALID` — система расчёта вознаграждений отказала в расчёте;
+- `PROCESSED` — данные по заказу проверены и информация о расчёте успешно получена.
+
+Формат запроса:
+
+```
+GET /api/user/orders HTTP/1.1
+Content-Length: 0
+```
+
+Возможные коды ответа:
+
+- `200` — успешная обработка запроса.
+
+  Формат ответа:
+
+    ```
+    200 OK HTTP/1.1
+    Content-Type: application/json
+    ...
+
+    [
+    	{
+            "number": "9278923470",
+            "status": "PROCESSED",
+            "accrual": 500,
+            "uploaded_at": "2020-12-10T15:15:45+03:00"
+        },
+        {
+            "number": "12345678903",
+            "status": "PROCESSING",
+            "uploaded_at": "2020-12-10T15:12:01+03:00"
+        },
+        {
+            "number": "346436439",
+            "status": "INVALID",
+            "uploaded_at": "2020-12-09T16:09:53+03:00"
+        }
+    ]
+    ```
+
+- `204` — нет данных для ответа.
+- `401` — пользователь не авторизован.
+- `500` — внутренняя ошибка сервера.
+
+*/
 
 /*
 

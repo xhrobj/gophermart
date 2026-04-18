@@ -13,6 +13,7 @@ type AuthService interface {
 
 - `POST /api/user/register`
   - вызывает: `AuthService.Register`
+
 - `POST /api/user/login`
   - вызывает: `AuthService.Login`
 
@@ -31,6 +32,7 @@ type OrderService interface {
 
 - `POST /api/user/orders`
   - вызывает: `OrderService.UploadOrder`
+
 - `GET /api/user/orders`
   - вызывает: `OrderService.ListOrders`
 
@@ -50,8 +52,10 @@ type BalanceService interface {
 
 - `GET /api/user/balance`
   - вызывает: `BalanceService.GetBalance`
+
 - `POST /api/user/balance/withdraw`
   - вызывает: `BalanceService.Withdraw`
+
 - `GET /api/user/withdrawals`
   - вызывает: `BalanceService.ListWithdrawals`
 
