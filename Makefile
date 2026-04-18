@@ -1,6 +1,6 @@
 .PHONY: run \
 		build clean \
-		test test-race test-integration \
+		test test-race test-integration test-coverage \
 		lint \
 		postgres-up postgres-start postgres-stop postgres-rm postgres-connect
 
@@ -36,6 +36,9 @@ test-race:
 
 test-integration:
 	go test -tags=integration ./internal/repository/...
+
+test-coverage:
+	go test -covermode=atomic -coverprofile=coverage.out ./...
 
 lint:
 	golangci-lint run

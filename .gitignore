@@ -24,3 +24,6 @@ vendor/
 #macOS
 .DS_Store
 __MACOSX/
+
+# build artifacts
+coverage.out

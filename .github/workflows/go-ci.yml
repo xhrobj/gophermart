@@ -33,7 +33,10 @@ jobs:
       - name: (^_^) Build gophermart
         run: make build
 
-      - name: (^_^) Run tests
+      - name: (^_^) Run tests with coverage
+        run: make test-coverage
+
+      - name: (^_^) Run race tests
         run: make test-race
 
       - name: (^_^) SonarQube Scan
