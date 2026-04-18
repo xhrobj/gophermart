@@ -3,11 +3,13 @@ package router
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xhrobj/gophermart/internal/auth"
 	"github.com/xhrobj/gophermart/internal/model"
 	"github.com/xhrobj/gophermart/internal/service"
 	"go.uber.org/zap"
@@ -169,6 +171,82 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 		bytes.NewBufferString(`{"login":"admin","password":"wrong"}`),
 	)
 	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestGetOrders_Unauthorized(t *testing.T) {
+	authService := &stubAuthService{}
+	tokenManager := &stubTokenManager{}
+
+	r := New(authService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestGetOrders_OK(t *testing.T) {
+	authService := &stubAuthService{}
+
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
+	rq.Header.Set("Authorization", "Bearer good-token")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	body, err := io.ReadAll(rs.Body)
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusOK, rs.StatusCode)
+	require.Equal(t, "text/plain; charset=utf-8", rs.Header.Get("Content-Type"))
+	require.Equal(t, "userID=1", string(body))
+}
+
+func TestGetOrders_InvalidToken(t *testing.T) {
+	authService := &stubAuthService{}
+
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "bad-token", token)
+			return 0, auth.ErrInvalidToken
+		},
+	}
+
+	r := New(authService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
+	rq.Header.Set("Authorization", "Bearer bad-token")
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, rq)
