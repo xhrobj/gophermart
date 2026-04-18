@@ -34,6 +34,6 @@ func GetOrders() http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 
-		_, _ = w.Write([]byte(fmt.Sprintf("userId=%d", userID)))
+		_, _ = fmt.Fprintf(w, "userID=%d", userID)
 	}
 }
