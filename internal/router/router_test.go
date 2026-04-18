@@ -15,6 +15,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	validOrderNumber       = "12345678903"
+	invalidLuhnOrderNumber = "12345678904"
+)
+
 type stubAuthService struct {
 	registerFunc func(ctx context.Context, login, password string) (model.AuthResult, error)
 	loginFunc    func(ctx context.Context, login, password string) (model.AuthResult, error)
@@ -202,6 +207,202 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 	})
 
 	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestUploadOrder_Unauthorized(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	tokenManager := &stubTokenManager{}
+
+	r := New(authService, orderService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(validOrderNumber))
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestUploadOrder_Accepted(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		uploadOrderFunc: func(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error) {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, "12345678903", orderNumber)
+
+			return model.UploadOrderResult{
+				Status: model.UploadOrderAccepted,
+			}, nil
+		},
+	}
+
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(validOrderNumber))
+	rq.Header.Set("Authorization", "Bearer good-token")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusAccepted, rs.StatusCode)
+}
+
+func TestUploadOrder_Duplicate(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		uploadOrderFunc: func(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error) {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, "12345678903", orderNumber)
+
+			return model.UploadOrderResult{
+				Status: model.UploadOrderDuplicate,
+			}, nil
+		},
+	}
+
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(validOrderNumber))
+	rq.Header.Set("Authorization", "Bearer good-token")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusOK, rs.StatusCode)
+}
+
+func TestUploadOrder_Conflict(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		uploadOrderFunc: func(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error) {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, validOrderNumber, orderNumber)
+
+			return model.UploadOrderResult{
+				Status: model.UploadOrderConflict,
+			}, nil
+		},
+	}
+
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(validOrderNumber))
+	rq.Header.Set("Authorization", "Bearer good-token")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusConflict, rs.StatusCode)
+}
+
+func TestUploadOrder_InvalidOrderInput(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		uploadOrderFunc: func(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error) {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, "   ", orderNumber)
+
+			return model.UploadOrderResult{}, service.ErrInvalidOrderInput
+		},
+	}
+
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString("   "))
+	rq.Header.Set("Authorization", "Bearer good-token")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusBadRequest, rs.StatusCode)
+}
+
+func TestUploadOrder_InvalidOrderNumber(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		uploadOrderFunc: func(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error) {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, invalidLuhnOrderNumber, orderNumber)
+
+			return model.UploadOrderResult{}, service.ErrInvalidOrderNumber
+		},
+	}
+
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(invalidLuhnOrderNumber))
+	rq.Header.Set("Authorization", "Bearer good-token")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnprocessableEntity, rs.StatusCode)
 }
 
 func TestGetOrders_Unauthorized(t *testing.T) {

@@ -178,7 +178,7 @@ func TestOrderService_UploadOrder_Conflict(t *testing.T) {
 	got, err := svc.UploadOrder(context.Background(), currentUserID, validOrderNumber)
 	require.NoError(t, err)
 	require.Equal(t, model.UploadOrderConflict, got.Status)
-	require.Equal(t, int64(otherUserID), got.Order.UserID)
+	require.Equal(t, otherUserID, got.Order.UserID)
 }
 
 func TestOrderService_UploadOrder_CreateRace_Duplicate(t *testing.T) {
