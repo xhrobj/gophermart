@@ -34,6 +34,31 @@ func (s *stubAuthService) Login(ctx context.Context, login, password string) (mo
 	return s.loginFunc(ctx, login, password)
 }
 
+type stubTokenManager struct {
+	generateFunc func(userID int64) (string, error)
+	parseFunc    func(token string) (int64, error)
+}
+
+func (s *stubTokenManager) Generate(userID int64) (string, error) {
+	if s.generateFunc == nil {
+		panic("unexpected call to stubTokenManager.Generate")
+	}
+
+	return s.generateFunc(userID)
+}
+
+func (s *stubTokenManager) Parse(token string) (int64, error) {
+	if s.parseFunc == nil {
+		panic("unexpected call to stubTokenManager.Parse")
+	}
+
+	return s.parseFunc(token)
+}
+
+func newTestRouter(authService service.AuthService) http.Handler {
+	return New(authService, &stubTokenManager{}, zap.NewNop())
+}
+
 func TestRegister_OK(t *testing.T) {
 	authService := &stubAuthService{
 		registerFunc: func(ctx context.Context, login, password string) (model.AuthResult, error) {
@@ -47,7 +72,7 @@ func TestRegister_OK(t *testing.T) {
 		},
 	}
 
-	r := New(authService, zap.NewNop())
+	r := newTestRouter(authService)
 
 	rq := httptest.NewRequest(
 		http.MethodPost,
@@ -75,7 +100,7 @@ func TestRegister_LoginAlreadyExists(t *testing.T) {
 		},
 	}
 
-	r := New(authService, zap.NewNop())
+	r := newTestRouter(authService)
 
 	rq := httptest.NewRequest(
 		http.MethodPost,
@@ -108,7 +133,7 @@ func TestLogin_OK(t *testing.T) {
 		},
 	}
 
-	r := New(authService, zap.NewNop())
+	r := newTestRouter(authService)
 
 	rq := httptest.NewRequest(
 		http.MethodPost,
@@ -136,7 +161,7 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 		},
 	}
 
-	r := New(authService, zap.NewNop())
+	r := newTestRouter(authService)
 
 	rq := httptest.NewRequest(
 		http.MethodPost,
