@@ -3,6 +3,7 @@ package router
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/xhrobj/gophermart/internal/auth"
 	"github.com/xhrobj/gophermart/internal/handler"
 	"github.com/xhrobj/gophermart/internal/middleware"
@@ -12,14 +13,21 @@ import (
 
 // New собирает HTTP-роутер приложения.
 func New(authService service.AuthService, tokenManager auth.TokenManager, lg *zap.Logger) http.Handler {
-	mux := http.NewServeMux()
+	r := chi.NewRouter()
 
-	// публичные маршруты iam
-	mux.HandleFunc("/api/user/register", handler.Register(authService))
-	mux.HandleFunc("/api/user/login", handler.Login(authService))
+	r.Use(middleware.WithLogging(lg))
 
-	// защищенный маршрут для авторизованных пользователей
-	mux.Handle("/api/user/orders", middleware.Auth(tokenManager)(handler.GetOrders()))
+	r.Route("/api/user", func(r chi.Router) {
+		// Публичные маршруты
+		r.Post("/register", handler.Register(authService))
+		r.Post("/login", handler.Login(authService))
 
-	return middleware.WithLogging(lg)(mux)
+		// Защищенные маршруты
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.WithAuth(tokenManager))
+			r.Get("/orders", handler.GetOrders())
+		})
+	})
+
+	return r
 }

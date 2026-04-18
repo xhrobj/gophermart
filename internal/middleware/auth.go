@@ -10,9 +10,9 @@ import (
 
 type userIDContextKey struct{}
 
-// Auth проверяет bearer-токен в запросе, извлекает из него userID
+// WithAuth проверяет bearer-токен в запросе, извлекает из него userID
 // и сохраняет идентификатор пользователя в контексте запроса.
-func Auth(tokenManager auth.TokenManager) func(http.Handler) http.Handler {
+func WithAuth(tokenManager auth.TokenManager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
