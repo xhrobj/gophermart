@@ -45,7 +45,7 @@ func (s *orderService) UploadOrder(ctx context.Context, userID int64, orderNumbe
 		return model.UploadOrderResult{}, ErrInvalidOrderInput
 	}
 
-	if !(isDigitsOnly(orderNumber) && isValidLuhn(orderNumber)) {
+	if !isDigitsOnly(orderNumber) || !isValidLuhn(orderNumber) {
 		return model.UploadOrderResult{}, ErrInvalidOrderNumber
 	}
 
