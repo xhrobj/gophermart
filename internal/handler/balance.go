@@ -21,57 +21,15 @@ type getWithdrawalsResponseItem struct {
 	ProcessedAt string  `json:"processed_at"`
 }
 
-/*
-
-#### **Получение текущего баланса пользователя**
-
-Хендлер: `GET /api/user/balance`.
-
-Хендлер доступен только авторизованному пользователю. В ответе должны содержаться данные о текущей сумме баллов лояльности, а также сумме использованных за весь период регистрации баллов.
-
-Формат запроса:
-
-```
-GET /api/user/balance HTTP/1.1
-Content-Length: 0
-```
-
-Возможные коды ответа:
-
-- `200` — успешная обработка запроса.
-
-  Формат ответа:
-
-    ```
-    200 OK HTTP/1.1
-    Content-Type: application/json
-    ...
-
-    {
-    	"current": 500.5,
-    	"withdrawn": 42
-    }
-    ```
-
-- `401` — пользователь не авторизован.
-- `500` — внутренняя ошибка сервера.
-
-*/
-
-/*
-
-curl -i http://localhost:8080/api/user/balance \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjEsImV4cCI6MTc3NjY4NTQ4NSwiaWF0IjoxNzc2NTk5MDg1fQ.wiyicfgtpgEEhA3xQisZyvy9ov_DSBZBpuh_Ssgqy6A"
-
-HTTP/1.1 200 OK
-Content-Type: application/json
-Content-Length: 28
-
-{"current":0,"withdrawn":0}
-
-*/
-
-// GetBalance возвращает текущий баланс пользователя и сумму всех списаний.
+// GetBalance возвращает текущий баланс пользователя и общую сумму списаний.
+//
+// Хендлер получает userID из контекста, запрашивает баланс в сервисе
+// и отдает ответ в формате JSON.
+//
+// Возможные коды ответа:
+//   - 200 -> баланс успешно получен
+//   - 401 -> пользователь не аутентифицирован
+//   - 500 -> при внутренней ошибке сервера
 func GetBalance(balanceService service.BalanceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, rq *http.Request) {
 		if rq.Method != http.MethodGet {
@@ -103,54 +61,17 @@ func GetBalance(balanceService service.BalanceService) http.HandlerFunc {
 	}
 }
 
-/*
-
-#### **Получение информации о выводе средств**
-
-Хендлер: `GET /api/user/withdrawals`.
-
-Хендлер доступен только авторизованному пользователю. Факты выводов в выдаче должны быть отсортированы по времени вывода от самых новых к самым старым. Формат даты — RFC3339.
-
-Формат запроса:
-
-```
-GET /api/user/withdrawals HTTP/1.1
-Content-Length: 0
-```
-
-Возможные коды ответа:
-
-- `200` — успешная обработка запроса.
-
-  Формат ответа:
-
-    ```
-    200 OK HTTP/1.1
-    Content-Type: application/json
-    ...
-
-    [
-        {
-            "order": "2377225624",
-            "sum": 500,
-            "processed_at": "2020-12-09T16:09:57+03:00"
-        }
-    ]
-    ```
-
-- `204` - нет ни одного списания.
-- `401` — пользователь не авторизован.
-- `500` — внутренняя ошибка сервера.
-
-*/
-
-/*
-
-curl -v http://localhost:8080/api/user/withdrawals \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjEsImV4cCI6MTc3NjY4NTQ4NSwiaWF0IjoxNzc2NTk5MDg1fQ.wiyicfgtpgEEhA3xQisZyvy9ov_DSBZBpuh_Ssgqy6A"
-
-*/
-
+// GetWithdrawals возвращает историю списаний текущего пользователя.
+//
+// Хендлер получает userID из контекста, запрашивает список списаний в сервисе
+// и отдает их в формате JSON. Списания должны быть отсортированы от новых к старым,
+// а время обработки сериализуется в формате RFC3339.
+//
+// Возможные коды ответа:
+//   - 200 -> список списаний успешно получен
+//   - 204 -> у пользователя нет списаний
+//   - 401 -> пользователь не аутентифицирован
+//   - 500 -> при внутренней ошибке сервера
 func GetWithdrawals(balanceService service.BalanceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, rq *http.Request) {
 		if rq.Method != http.MethodGet {

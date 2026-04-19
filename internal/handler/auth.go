@@ -15,14 +15,6 @@ type authRequest struct {
 	Password string `json:"password"`
 }
 
-/*
-
-curl -i -X POST http://localhost:8080/api/user/register \
-  -H "Content-Type: application/json" \
-  -d '{"login": "admin","password": "god"}'
-
-*/
-
 // Register возвращает HTTP-хендлер для регистрации пользователя.
 //
 // Хендлер принимает JSON с логином и паролем, вызывает AuthService.Register
@@ -64,14 +56,6 @@ func Register(authService service.AuthService) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 	}
 }
-
-/*
-
-curl -i -X POST http://localhost:8080/api/user/login \
-  -H "Content-Type: application/json" \
-  -d '{"login": "admin","password": "god"}'
-
-*/
 
 // Login возвращает HTTP-хендлер для аутентификации пользователя.
 //

@@ -114,7 +114,7 @@ func (r *PostgresOrderRepository) FindByNumber(ctx context.Context, orderNumber 
 
 // ListByUserID возвращает список заказов пользователя
 //
-//	в обратном хронологическом порядке.
+// в обратном хронологическом порядке.
 func (r *PostgresOrderRepository) ListByUserID(ctx context.Context, userID int64) ([]model.Order, error) {
 	const query = `
 		SELECT
