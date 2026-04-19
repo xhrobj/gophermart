@@ -73,7 +73,10 @@ func run() error {
 	orderRepo := repository.NewPostgresOrderRepository(db)
 	orderService := service.NewOrderService(orderRepo)
 
-	appRouter := router.New(authService, orderService, tokenManager, lg)
+	balanceRepo := repository.NewPostgresBalanceRepository(db)
+	balanceService := service.NewBalanceService(balanceRepo)
+
+	appRouter := router.New(authService, orderService, balanceService, tokenManager, lg)
 
 	lg.Info("(^.^)~ Gophermart is starting HTTP server",
 		zap.String("address", cfg.RunAddress),

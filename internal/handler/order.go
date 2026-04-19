@@ -12,6 +12,13 @@ import (
 	"github.com/xhrobj/gophermart/internal/service"
 )
 
+type getOrdersResponseItem struct {
+	Number     string   `json:"number"`
+	Status     string   `json:"status"`
+	Accrual    *float64 `json:"accrual,omitempty"`
+	UploadedAt string   `json:"uploaded_at"`
+}
+
 /*
 
 #### **Загрузка номера заказа**
@@ -159,17 +166,10 @@ curl -i http://localhost:8080/api/user/orders \
 
 */
 
-type getOrdersResponseItem struct {
-	Number     string   `json:"number"`
-	Status     string   `json:"status"`
-	Accrual    *float64 `json:"accrual,omitempty"`
-	UploadedAt string   `json:"uploaded_at"`
-}
-
 /*
 
 curl -i http://localhost:8080/api/user/orders \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjEsImV4cCI6MTc3NjU5ODQwMiwiaWF0IjoxNzc2NTEyMDAyfQ.CfqmWqKvD0FPe6vrsrQChQvPh8edzDGj_Akotfq6d4I"
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjEsImV4cCI6MTc3NjY4NTQ4NSwiaWF0IjoxNzc2NTk5MDg1fQ.wiyicfgtpgEEhA3xQisZyvy9ov_DSBZBpuh_Ssgqy6A"
 
 HTTP/1.1 200 OK
 Content-Type: application/json
@@ -231,8 +231,4 @@ func buildGetOrdersResponseItem(order model.Order) getOrdersResponseItem {
 	}
 
 	return item
-}
-
-func hundredthsToAmount(v int64) float64 {
-	return float64(v) / 100
 }

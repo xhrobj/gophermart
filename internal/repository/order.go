@@ -12,7 +12,10 @@ import (
 )
 
 var (
-	ErrOrderNotFound      = errors.New("order not found")
+	// ErrOrderNotFound возвращается, если заказ не найден.
+	ErrOrderNotFound = errors.New("order not found")
+
+	// ErrOrderAlreadyExists возвращается, если заказ с таким номером уже существует.
 	ErrOrderAlreadyExists = errors.New("order already exists")
 )
 
@@ -34,16 +37,21 @@ type OrderRepository interface {
 	SetAccrualResult(ctx context.Context, orderNumber string, status model.OrderStatus, accrual int64) error
 }
 
+// PostgresOrderRepository реализует OrderRepository поверх PostgreSQL.
 type PostgresOrderRepository struct {
 	db *sql.DB
 }
 
+// NewPostgresOrderRepository создает репозиторий заказов на базе PostgreSQL.
 func NewPostgresOrderRepository(db *sql.DB) *PostgresOrderRepository {
 	return &PostgresOrderRepository{
 		db: db,
 	}
 }
 
+// Create создает новый заказ пользователя.
+//
+// Если заказ с таким номером уже существует, метод возвращает ErrOrderAlreadyExists.
 func (r *PostgresOrderRepository) Create(ctx context.Context, userID int64, orderNumber string) (model.Order, error) {
 	const query = `
 		INSERT INTO orders (number, user_id)
@@ -73,6 +81,9 @@ func (r *PostgresOrderRepository) Create(ctx context.Context, userID int64, orde
 	return order, nil
 }
 
+// FindByNumber возвращает заказ по его номеру.
+//
+// Если заказ не найден, метод возвращает ErrOrderNotFound.
 func (r *PostgresOrderRepository) FindByNumber(ctx context.Context, orderNumber string) (model.Order, error) {
 	const query = `
 		SELECT id, number, user_id, status, accrual, uploaded_at
@@ -101,6 +112,9 @@ func (r *PostgresOrderRepository) FindByNumber(ctx context.Context, orderNumber 
 	return order, nil
 }
 
+// ListByUserID возвращает список заказов пользователя
+//
+//	в обратном хронологическом порядке.
 func (r *PostgresOrderRepository) ListByUserID(ctx context.Context, userID int64) ([]model.Order, error) {
 	const query = `
 		SELECT
@@ -119,7 +133,9 @@ func (r *PostgresOrderRepository) ListByUserID(ctx context.Context, userID int64
 	if err != nil {
 		return nil, fmt.Errorf("list orders by user id: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	orders := make([]model.Order, 0)
 

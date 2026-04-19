@@ -15,6 +15,7 @@ import (
 func New(
 	authService service.AuthService,
 	orderService service.OrderService,
+	balanceService service.BalanceService,
 	tokenManager auth.TokenManager,
 	lg *zap.Logger,
 ) http.Handler {
@@ -30,8 +31,10 @@ func New(
 		// Защищенные маршруты
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.WithAuth(tokenManager))
+
 			r.Post("/orders", handler.UploadOrder(orderService))
 			r.Get("/orders", handler.GetOrders(orderService))
+			r.Get("/balance", handler.GetBalance(balanceService))
 		})
 	})
 

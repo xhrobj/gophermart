@@ -23,6 +23,18 @@ const (
 	invalidLuhnOrderNumber = "12345678904"
 )
 
+type getOrdersResponseItem struct {
+	Number     string   `json:"number"`
+	Status     string   `json:"status"`
+	Accrual    *float64 `json:"accrual,omitempty"`
+	UploadedAt string   `json:"uploaded_at"`
+}
+
+type getBalanceResponse struct {
+	Current   float64 `json:"current"`
+	Withdrawn float64 `json:"withdrawn"`
+}
+
 type stubAuthService struct {
 	registerFunc func(ctx context.Context, login, password string) (model.AuthResult, error)
 	loginFunc    func(ctx context.Context, login, password string) (model.AuthResult, error)
@@ -65,6 +77,36 @@ func (s *stubOrderService) ListOrders(ctx context.Context, userID int64) ([]mode
 	return s.listOrdersFunc(ctx, userID)
 }
 
+type stubBalanceService struct {
+	getBalanceFunc      func(ctx context.Context, userID int64) (model.Balance, error)
+	withdrawFunc        func(ctx context.Context, userID int64, orderNumber string, sum int64) error
+	listWithdrawalsFunc func(ctx context.Context, userID int64) ([]model.Withdrawal, error)
+}
+
+func (s *stubBalanceService) GetBalance(ctx context.Context, userID int64) (model.Balance, error) {
+	if s.getBalanceFunc == nil {
+		return model.Balance{}, nil
+	}
+
+	return s.getBalanceFunc(ctx, userID)
+}
+
+func (s *stubBalanceService) Withdraw(ctx context.Context, userID int64, orderNumber string, sum int64) error {
+	if s.withdrawFunc == nil {
+		return nil
+	}
+
+	return s.withdrawFunc(ctx, userID, orderNumber, sum)
+}
+
+func (s *stubBalanceService) ListWithdrawals(ctx context.Context, userID int64) ([]model.Withdrawal, error) {
+	if s.listWithdrawalsFunc == nil {
+		return nil, nil
+	}
+
+	return s.listWithdrawalsFunc(ctx, userID)
+}
+
 type stubTokenManager struct {
 	generateFunc func(userID int64) (string, error)
 	parseFunc    func(token string) (int64, error)
@@ -87,7 +129,7 @@ func (s *stubTokenManager) Parse(token string) (int64, error) {
 }
 
 func newTestRouter(authService service.AuthService, orderService service.OrderService) http.Handler {
-	return New(authService, orderService, &stubTokenManager{}, zap.NewNop())
+	return New(authService, orderService, &stubBalanceService{}, &stubTokenManager{}, zap.NewNop())
 }
 
 func TestRegister_OK(t *testing.T) {
@@ -217,7 +259,7 @@ func TestUploadOrder_Unauthorized(t *testing.T) {
 	orderService := &stubOrderService{}
 	tokenManager := &stubTokenManager{}
 
-	r := New(authService, orderService, tokenManager, zap.NewNop())
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(validOrderNumber))
 	rec := httptest.NewRecorder()
@@ -252,7 +294,7 @@ func TestUploadOrder_Accepted(t *testing.T) {
 		},
 	}
 
-	r := New(authService, orderService, tokenManager, zap.NewNop())
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(validOrderNumber))
 	rq.Header.Set("Authorization", "Bearer good-token")
@@ -288,7 +330,7 @@ func TestUploadOrder_Duplicate(t *testing.T) {
 		},
 	}
 
-	r := New(authService, orderService, tokenManager, zap.NewNop())
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(validOrderNumber))
 	rq.Header.Set("Authorization", "Bearer good-token")
@@ -324,7 +366,7 @@ func TestUploadOrder_Conflict(t *testing.T) {
 		},
 	}
 
-	r := New(authService, orderService, tokenManager, zap.NewNop())
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(validOrderNumber))
 	rq.Header.Set("Authorization", "Bearer good-token")
@@ -358,7 +400,7 @@ func TestUploadOrder_InvalidOrderInput(t *testing.T) {
 		},
 	}
 
-	r := New(authService, orderService, tokenManager, zap.NewNop())
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString("   "))
 	rq.Header.Set("Authorization", "Bearer good-token")
@@ -392,7 +434,7 @@ func TestUploadOrder_InvalidOrderNumber(t *testing.T) {
 		},
 	}
 
-	r := New(authService, orderService, tokenManager, zap.NewNop())
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(invalidLuhnOrderNumber))
 	rq.Header.Set("Authorization", "Bearer good-token")
@@ -408,18 +450,11 @@ func TestUploadOrder_InvalidOrderNumber(t *testing.T) {
 	require.Equal(t, http.StatusUnprocessableEntity, rs.StatusCode)
 }
 
-type getOrdersResponseItem struct {
-	Number     string   `json:"number"`
-	Status     string   `json:"status"`
-	Accrual    *float64 `json:"accrual,omitempty"`
-	UploadedAt string   `json:"uploaded_at"`
-}
-
 func TestGetOrders_Unauthorized(t *testing.T) {
 	authService := &stubAuthService{}
 	tokenManager := &stubTokenManager{}
 
-	r := New(authService, &stubOrderService{}, tokenManager, zap.NewNop())
+	r := New(authService, &stubOrderService{}, &stubBalanceService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
 	rec := httptest.NewRecorder()
@@ -443,7 +478,7 @@ func TestGetOrders_InvalidToken(t *testing.T) {
 		},
 	}
 
-	r := New(authService, &stubOrderService{}, tokenManager, zap.NewNop())
+	r := New(authService, &stubOrderService{}, &stubBalanceService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
 	rq.Header.Set("Authorization", "Bearer bad-token")
@@ -474,7 +509,7 @@ func TestGetOrders_NoContent(t *testing.T) {
 		},
 	}
 
-	r := New(authService, orderService, tokenManager, zap.NewNop())
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
 	rq.Header.Set("Authorization", "Bearer good-token")
@@ -509,7 +544,7 @@ func TestGetOrders_OK(t *testing.T) {
 					UserID:     1,
 					Status:     model.OrderStatusProcessed,
 					Accrual:    50050, // 500.50 во внешнем API
-					UploadedAt: time.Date(2020, 12, 10, 15, 15, 45, 0, loc),
+					UploadedAt: time.Date(2026, 4, 18, 15, 15, 45, 0, loc),
 				},
 				{
 					ID:         2,
@@ -517,7 +552,7 @@ func TestGetOrders_OK(t *testing.T) {
 					UserID:     1,
 					Status:     model.OrderStatusProcessing,
 					Accrual:    0,
-					UploadedAt: time.Date(2020, 12, 10, 15, 12, 1, 0, loc),
+					UploadedAt: time.Date(2026, 4, 18, 15, 12, 1, 0, loc),
 				},
 				{
 					ID:         3,
@@ -525,7 +560,7 @@ func TestGetOrders_OK(t *testing.T) {
 					UserID:     1,
 					Status:     model.OrderStatusInvalid,
 					Accrual:    0,
-					UploadedAt: time.Date(2020, 12, 9, 16, 9, 53, 0, loc),
+					UploadedAt: time.Date(2026, 4, 17, 16, 9, 53, 0, loc),
 				},
 			}, nil
 		},
@@ -537,7 +572,7 @@ func TestGetOrders_OK(t *testing.T) {
 		},
 	}
 
-	r := New(authService, orderService, tokenManager, zap.NewNop())
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
 	rq.Header.Set("Authorization", "Bearer good-token")
@@ -561,18 +596,18 @@ func TestGetOrders_OK(t *testing.T) {
 
 	require.Equal(t, "9278923470", got[0].Number)
 	require.Equal(t, "PROCESSED", got[0].Status)
-	require.Equal(t, "2020-12-10T15:15:45+03:00", got[0].UploadedAt)
+	require.Equal(t, "2026-04-18T15:15:45+03:00", got[0].UploadedAt)
 	require.NotNil(t, got[0].Accrual)
 	require.InDelta(t, 500.5, *got[0].Accrual, 0.000001)
 
 	require.Equal(t, "12345678903", got[1].Number)
 	require.Equal(t, "PROCESSING", got[1].Status)
-	require.Equal(t, "2020-12-10T15:12:01+03:00", got[1].UploadedAt)
+	require.Equal(t, "2026-04-18T15:12:01+03:00", got[1].UploadedAt)
 	require.Nil(t, got[1].Accrual)
 
 	require.Equal(t, "346436439", got[2].Number)
 	require.Equal(t, "INVALID", got[2].Status)
-	require.Equal(t, "2020-12-09T16:09:53+03:00", got[2].UploadedAt)
+	require.Equal(t, "2026-04-17T16:09:53+03:00", got[2].UploadedAt)
 	require.Nil(t, got[2].Accrual)
 }
 
@@ -591,9 +626,131 @@ func TestGetOrders_InternalError(t *testing.T) {
 		},
 	}
 
-	r := New(authService, orderService, tokenManager, zap.NewNop())
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
 
 	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusInternalServerError, rs.StatusCode)
+}
+
+func TestGetBalance_Unauthorized(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{}
+	tokenManager := &stubTokenManager{}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/balance", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestGetBalance_InvalidToken(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "bad-token", token)
+			return 0, auth.ErrInvalidToken
+		},
+	}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/balance", nil)
+	rq.Header.Set("Authorization", "Bearer bad-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestGetBalance_OK(t *testing.T) {
+	authService := &stubAuthService{}
+	balanceService := &stubBalanceService{
+		getBalanceFunc: func(ctx context.Context, userID int64) (model.Balance, error) {
+			require.Equal(t, int64(1), userID)
+
+			return model.Balance{
+				Current:   50050,
+				Withdrawn: 4200,
+			}, nil
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, &stubOrderService{}, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/balance", nil)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusOK, rs.StatusCode)
+	require.Equal(t, "application/json", rs.Header.Get("Content-Type"))
+
+	var got getBalanceResponse
+	err := json.NewDecoder(rs.Body).Decode(&got)
+	require.NoError(t, err)
+
+	require.InDelta(t, 500.5, got.Current, 0.000001)
+	require.InDelta(t, 42.0, got.Withdrawn, 0.000001)
+}
+
+func TestGetBalance_InternalError(t *testing.T) {
+	authService := &stubAuthService{}
+	balanceService := &stubBalanceService{
+		getBalanceFunc: func(ctx context.Context, userID int64) (model.Balance, error) {
+			require.Equal(t, int64(1), userID)
+			return model.Balance{}, errors.New("db failed")
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, &stubOrderService{}, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/balance", nil)
 	rq.Header.Set("Authorization", "Bearer good-token")
 	rec := httptest.NewRecorder()
 

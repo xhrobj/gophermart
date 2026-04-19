@@ -12,7 +12,10 @@ import (
 )
 
 var (
-	ErrUserNotFound      = errors.New("user not found")
+	// ErrUserNotFound означает, что пользователь не найден.
+	ErrUserNotFound = errors.New("user not found")
+
+	// ErrUserAlreadyExists означает, что пользователь с таким логином уже существует.
 	ErrUserAlreadyExists = errors.New("user already exists")
 )
 
@@ -25,10 +28,12 @@ type UserRepository interface {
 	FindByLogin(ctx context.Context, login string) (model.User, error)
 }
 
+// PostgresUserRepository реализует UserRepository поверх PostgreSQL.
 type PostgresUserRepository struct {
 	db *sql.DB
 }
 
+// NewPostgresUserRepository создает репозиторий пользователей на базе PostgreSQL.
 func NewPostgresUserRepository(db *sql.DB) *PostgresUserRepository {
 	return &PostgresUserRepository{
 		db: db,
