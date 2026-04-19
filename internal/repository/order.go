@@ -102,7 +102,50 @@ func (r *PostgresOrderRepository) FindByNumber(ctx context.Context, orderNumber 
 }
 
 func (r *PostgresOrderRepository) ListByUserID(ctx context.Context, userID int64) ([]model.Order, error) {
-	panic("¯＼_(ツ)_/¯")
+	const query = `
+		SELECT
+			id,
+			number,
+			user_id,
+			status,
+			accrual,
+			uploaded_at
+		FROM orders
+		WHERE user_id = $1
+		ORDER BY uploaded_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list orders by user id: %w", err)
+	}
+	defer rows.Close()
+
+	orders := make([]model.Order, 0)
+
+	for rows.Next() {
+		var order model.Order
+
+		err = rows.Scan(
+			&order.ID,
+			&order.Number,
+			&order.UserID,
+			&order.Status,
+			&order.Accrual,
+			&order.UploadedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan order row: %w", err)
+		}
+
+		orders = append(orders, order)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate order rows: %w", err)
+	}
+
+	return orders, nil
 }
 
 func (r *PostgresOrderRepository) ListPending(ctx context.Context, limit int) ([]model.Order, error) {

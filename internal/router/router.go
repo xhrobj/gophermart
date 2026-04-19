@@ -31,7 +31,7 @@ func New(
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.WithAuth(tokenManager))
 			r.Post("/orders", handler.UploadOrder(orderService))
-			r.Get("/orders", handler.GetOrders())
+			r.Get("/orders", handler.GetOrders(orderService))
 		})
 	})
 

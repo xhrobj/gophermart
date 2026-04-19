@@ -1,10 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/xhrobj/gophermart/internal/middleware"
 	"github.com/xhrobj/gophermart/internal/model"
@@ -158,22 +159,80 @@ curl -i http://localhost:8080/api/user/orders \
 
 */
 
-func GetOrders() http.HandlerFunc {
+type getOrdersResponseItem struct {
+	Number     string   `json:"number"`
+	Status     string   `json:"status"`
+	Accrual    *float64 `json:"accrual,omitempty"`
+	UploadedAt string   `json:"uploaded_at"`
+}
+
+/*
+
+curl -i http://localhost:8080/api/user/orders \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjEsImV4cCI6MTc3NjU5ODQwMiwiaWF0IjoxNzc2NTEyMDAyfQ.CfqmWqKvD0FPe6vrsrQChQvPh8edzDGj_Akotfq6d4I"
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: 84
+
+[{"number":"12345678903","status":"NEW","uploaded_at":"2026-04-18T20:27:42+03:00"}]
+
+*/
+
+func GetOrders(orderService service.OrderService) http.HandlerFunc {
 	return func(w http.ResponseWriter, rq *http.Request) {
 		if rq.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
 
 		userID, ok := middleware.UserIDFromContext(rq.Context())
 		if !ok {
-			http.Error(w, "(о_0) user is not authorized", http.StatusUnauthorized)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		orders, err := orderService.ListOrders(rq.Context(), userID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if len(orders) == 0 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		result := make([]getOrdersResponseItem, 0, len(orders))
+		for _, order := range orders {
+			result = append(result, buildGetOrdersResponseItem(order))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
-		_, _ = fmt.Fprintf(w, "userID=%d", userID)
+		if err = json.NewEncoder(w).Encode(result); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
+}
+
+func buildGetOrdersResponseItem(order model.Order) getOrdersResponseItem {
+	item := getOrdersResponseItem{
+		Number:     order.Number,
+		Status:     string(order.Status),
+		UploadedAt: order.UploadedAt.Format(time.RFC3339),
+	}
+
+	if order.Status == model.OrderStatusProcessed {
+		accrual := hundredthsToAmount(order.Accrual)
+		item.Accrual = &accrual
+	}
+
+	return item
+}
+
+func hundredthsToAmount(v int64) float64 {
+	return float64(v) / 100
 }
