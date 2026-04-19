@@ -38,6 +38,34 @@ func insertWithdrawalForBalanceTest(
 	require.NoError(t, err)
 }
 
+func truncateWithdrawals(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	_, err := db.Exec(`TRUNCATE TABLE withdrawals RESTART IDENTITY CASCADE`)
+	require.NoError(t, err)
+}
+
+func insertWithdrawalForTest(
+	t *testing.T,
+	db *sql.DB,
+	userID int64,
+	orderNumber string,
+	sum int64,
+	processedAt time.Time,
+) {
+	t.Helper()
+
+	_, err := db.Exec(
+		`INSERT INTO withdrawals (user_id, order_number, amount, processed_at)
+		 VALUES ($1, $2, $3, $4)`,
+		userID,
+		orderNumber,
+		sum,
+		processedAt,
+	)
+	require.NoError(t, err)
+}
+
 func TestPostgresBalanceRepository_GetBalance_Empty(t *testing.T) {
 	db := openTestDB(t)
 	truncateBalanceData(t, db)
@@ -192,4 +220,49 @@ func TestPostgresBalanceRepository_GetBalance_IgnoresNonProcessedOrdersAndOtherU
 
 	require.Equal(t, int64(9299), got.Current)
 	require.Equal(t, int64(511), got.Withdrawn)
+}
+
+func TestPostgresBalanceRepository_ListWithdrawals_OK(t *testing.T) {
+	db := openTestDB(t)
+	truncateWithdrawals(t, db)
+
+	userRepo := NewPostgresUserRepository(db)
+	balanceRepo := NewPostgresBalanceRepository(db)
+
+	firstUserID := createTestUser(t, userRepo, "first-user")
+	secondUserID := createTestUser(t, userRepo, "second-user")
+
+	olderTime := time.Date(2026, 4, 18, 20, 0, 0, 0, time.UTC)
+	newerTime := time.Date(2026, 4, 19, 20, 0, 0, 0, time.UTC)
+
+	insertWithdrawalForTest(t, db, firstUserID, "117", 51100, olderTime)
+	insertWithdrawalForTest(t, db, firstUserID, "125", 7500, newerTime)
+	insertWithdrawalForTest(t, db, secondUserID, "133", 9900, newerTime)
+
+	got, err := balanceRepo.ListWithdrawals(context.Background(), firstUserID)
+	require.NoError(t, err)
+
+	require.Len(t, got, 2)
+
+	require.Equal(t, "125", got[0].OrderNumber)
+	require.Equal(t, int64(7500), got[0].Sum)
+	require.Equal(t, newerTime, got[0].ProcessedAt)
+
+	require.Equal(t, "117", got[1].OrderNumber)
+	require.Equal(t, int64(51100), got[1].Sum)
+	require.Equal(t, olderTime, got[1].ProcessedAt)
+}
+
+func TestPostgresBalanceRepository_ListWithdrawals_Empty(t *testing.T) {
+	db := openTestDB(t)
+	truncateBalanceData(t, db)
+
+	userRepo := NewPostgresUserRepository(db)
+	balanceRepo := NewPostgresBalanceRepository(db)
+
+	userID := createTestUser(t, userRepo, "admin")
+
+	got, err := balanceRepo.ListWithdrawals(context.Background(), userID)
+	require.NoError(t, err)
+	require.Empty(t, got)
 }

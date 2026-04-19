@@ -71,5 +71,41 @@ func (r *PostgresBalanceRepository) Withdraw(ctx context.Context, userID int64, 
 }
 
 func (r *PostgresBalanceRepository) ListWithdrawals(ctx context.Context, userID int64) ([]model.Withdrawal, error) {
-	panic("¯＼_(ツ)_/¯")
+	const query = `
+		SELECT id, user_id, order_number, amount, processed_at
+		FROM withdrawals
+		WHERE user_id = $1
+		ORDER BY processed_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list withdrawals by user id: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	withdrawals := make([]model.Withdrawal, 0)
+	for rows.Next() {
+		var withdrawal model.Withdrawal
+		err = rows.Scan(
+			&withdrawal.ID,
+			&withdrawal.UserID,
+			&withdrawal.OrderNumber,
+			&withdrawal.Sum,
+			&withdrawal.ProcessedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan withdrawal row: %w", err)
+		}
+
+		withdrawals = append(withdrawals, withdrawal)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate withdrawal rows: %w", err)
+	}
+
+	return withdrawals, nil
 }

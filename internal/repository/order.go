@@ -12,10 +12,10 @@ import (
 )
 
 var (
-	// ErrOrderNotFound возвращается, если заказ не найден.
+	// ErrOrderNotFound означает, что заказ не найден.
 	ErrOrderNotFound = errors.New("order not found")
 
-	// ErrOrderAlreadyExists возвращается, если заказ с таким номером уже существует.
+	// ErrOrderAlreadyExists означает, что заказ с таким номером уже существует.
 	ErrOrderAlreadyExists = errors.New("order already exists")
 )
 
