@@ -47,7 +47,7 @@ curl -i -X POST http://localhost:8080/api/user/orders \
   -d '12345678903'
 ```
 
-### Получение списка заказов
+### Получение списка загруженных заказов
 
 ```bash
 curl -i http://localhost:8080/api/user/orders \
@@ -60,6 +60,17 @@ curl -i http://localhost:8080/api/user/orders \
 curl -i http://localhost:8080/api/user/balance \
   -H "Authorization: Bearer <jwt-token>"
 ```
+
+### Списание баллов
+
+```bash
+curl -i -X POST http://localhost:8080/api/user/balance/withdraw \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
+  -d '{
+    "order": "2377225624",
+    "sum": 5.11
+  }'
 
 ### Получение истории списаний
 

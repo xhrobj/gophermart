@@ -35,6 +35,7 @@ func New(
 			r.Post("/orders", handler.UploadOrder(orderService))
 			r.Get("/orders", handler.GetOrders(orderService))
 			r.Get("/balance", handler.GetBalance(balanceService))
+			r.Post("/balance/withdraw", handler.Withdraw(balanceService))
 			r.Get("/withdrawals", handler.GetWithdrawals(balanceService))
 		})
 	})

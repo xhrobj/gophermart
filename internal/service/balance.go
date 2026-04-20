@@ -2,10 +2,18 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/xhrobj/gophermart/internal/model"
 	"github.com/xhrobj/gophermart/internal/repository"
+)
+
+var (
+	ErrInvalidWithdrawOrderNumber = errors.New("invalid withdraw order number")
+	ErrInvalidWithdrawSum         = errors.New("invalid withdraw sum")
+	ErrInsufficientFunds          = errors.New("insufficient funds")
 )
 
 // BalanceService описывает операции с бонусным счетом пользователя.
@@ -43,7 +51,25 @@ func (s *balanceService) GetBalance(ctx context.Context, userID int64) (model.Ba
 }
 
 func (s *balanceService) Withdraw(ctx context.Context, userID int64, orderNumber string, sum int64) error {
-	return s.balanceRepo.Withdraw(ctx, userID, orderNumber, sum)
+	orderNumber = strings.TrimSpace(orderNumber)
+	if orderNumber == "" || !isDigitsOnly(orderNumber) || !isValidLuhn(orderNumber) {
+		return ErrInvalidWithdrawOrderNumber
+	}
+
+	if sum <= 0 {
+		return ErrInvalidWithdrawSum
+	}
+
+	err := s.balanceRepo.Withdraw(ctx, userID, orderNumber, sum)
+	if err != nil {
+		if errors.Is(err, repository.ErrInsufficientFunds) {
+			return ErrInsufficientFunds
+		}
+
+		return fmt.Errorf("withdraw: %w", err)
+	}
+
+	return nil
 }
 
 func (s *balanceService) ListWithdrawals(ctx context.Context, userID int64) ([]model.Withdrawal, error) {

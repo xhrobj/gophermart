@@ -222,6 +222,81 @@ func TestPostgresBalanceRepository_GetBalance_IgnoresNonProcessedOrdersAndOtherU
 	require.Equal(t, int64(511), got.Withdrawn)
 }
 
+func TestPostgresBalanceRepository_Withdraw_OK(t *testing.T) {
+	db := openTestDB(t)
+	truncateBalanceData(t, db)
+
+	userRepo := NewPostgresUserRepository(db)
+	orderRepo := NewPostgresOrderRepository(db)
+	balanceRepo := NewPostgresBalanceRepository(db)
+	ctx := context.Background()
+
+	userID := createTestUser(t, userRepo, "admin")
+
+	_, err := orderRepo.Create(ctx, userID, "109")
+	require.NoError(t, err)
+
+	updateOrderForListTest(
+		t,
+		db,
+		"109",
+		"PROCESSED",
+		10050,
+		time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC),
+	)
+
+	err = balanceRepo.Withdraw(ctx, userID, "2377225624", 511)
+	require.NoError(t, err)
+
+	balance, err := balanceRepo.GetBalance(ctx, userID)
+	require.NoError(t, err)
+	require.Equal(t, int64(9539), balance.Current)
+	require.Equal(t, int64(511), balance.Withdrawn)
+
+	withdrawals, err := balanceRepo.ListWithdrawals(ctx, userID)
+	require.NoError(t, err)
+	require.Len(t, withdrawals, 1)
+	require.Equal(t, "2377225624", withdrawals[0].OrderNumber)
+	require.Equal(t, int64(511), withdrawals[0].Sum)
+}
+
+func TestPostgresBalanceRepository_Withdraw_InsufficientFunds(t *testing.T) {
+	db := openTestDB(t)
+	truncateBalanceData(t, db)
+
+	userRepo := NewPostgresUserRepository(db)
+	orderRepo := NewPostgresOrderRepository(db)
+	balanceRepo := NewPostgresBalanceRepository(db)
+	ctx := context.Background()
+
+	userID := createTestUser(t, userRepo, "admin")
+
+	_, err := orderRepo.Create(ctx, userID, "109")
+	require.NoError(t, err)
+
+	updateOrderForListTest(
+		t,
+		db,
+		"109",
+		"PROCESSED",
+		500,
+		time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC),
+	)
+
+	err = balanceRepo.Withdraw(ctx, userID, "2377225624", 511)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInsufficientFunds)
+
+	balance, err := balanceRepo.GetBalance(ctx, userID)
+	require.NoError(t, err)
+	require.Equal(t, int64(500), balance.Current)
+	require.Equal(t, int64(0), balance.Withdrawn)
+
+	withdrawals, err := balanceRepo.ListWithdrawals(ctx, userID)
+	require.NoError(t, err)
+	require.Empty(t, withdrawals)
+}
+
 func TestPostgresBalanceRepository_ListWithdrawals_OK(t *testing.T) {
 	db := openTestDB(t)
 	truncateWithdrawals(t, db)

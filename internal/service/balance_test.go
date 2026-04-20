@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/xhrobj/gophermart/internal/model"
+	"github.com/xhrobj/gophermart/internal/repository"
 )
 
 type stubBalanceRepo struct {
@@ -77,6 +78,71 @@ func TestBalanceService_GetBalance_RepositoryError(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, expectedErr)
 	require.ErrorContains(t, err, "get balance")
+}
+
+func TestBalanceService_Withdraw_OK(t *testing.T) {
+	t.Parallel()
+
+	repo := &stubBalanceRepo{
+		withdrawFunc: func(ctx context.Context, userID int64, orderNumber string, sum int64) error {
+			require.Equal(t, int64(42), userID)
+			require.Equal(t, "2377225624", orderNumber)
+			require.Equal(t, int64(511), sum)
+
+			return nil
+		},
+	}
+
+	svc := NewBalanceService(repo)
+
+	err := svc.Withdraw(context.Background(), 42, "2377225624", 511)
+
+	require.NoError(t, err)
+}
+
+func TestBalanceService_Withdraw_InvalidOrderNumber(t *testing.T) {
+	t.Parallel()
+
+	repo := &stubBalanceRepo{}
+	svc := NewBalanceService(repo)
+
+	err := svc.Withdraw(context.Background(), 42, "2377225625", 511)
+
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidWithdrawOrderNumber)
+}
+
+func TestBalanceService_Withdraw_InvalidSum(t *testing.T) {
+	t.Parallel()
+
+	repo := &stubBalanceRepo{}
+	svc := NewBalanceService(repo)
+
+	err := svc.Withdraw(context.Background(), 42, "2377225624", 0)
+
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidWithdrawSum)
+}
+
+func TestBalanceService_Withdraw_InsufficientFunds(t *testing.T) {
+	t.Parallel()
+
+	repo := &stubBalanceRepo{
+		withdrawFunc: func(ctx context.Context, userID int64, orderNumber string, sum int64) error {
+			require.Equal(t, int64(42), userID)
+			require.Equal(t, "2377225624", orderNumber)
+			require.Equal(t, int64(511), sum)
+
+			return repository.ErrInsufficientFunds
+		},
+	}
+
+	svc := NewBalanceService(repo)
+
+	err := svc.Withdraw(context.Background(), 42, "2377225624", 511)
+
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInsufficientFunds)
 }
 
 func TestBalanceService_ListWithdrawals_OK(t *testing.T) {
