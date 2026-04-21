@@ -18,6 +18,67 @@
 
 Техническое задание - см. [SPECIFICATION.md](SPECIFICATION.md)
 
+## Локальный запуск через Docker Compose
+
+Поднять приложение и PostgreSQL:
+
+```bash
+make run-dev
+```
+
+После старта будут доступны:
+
+- API: `http://localhost:8080`
+- PostgreSQL: `localhost:5432`
+
+Остановить окружение:
+
+```bash
+make run-dev-down
+```
+
+Посмотреть логи:
+
+```bash
+make run-dev-logs
+```
+
+> В `docker-compose.yml` сервис запускается с `RUN_ADDRESS=:8080`, чтобы приложение было доступно с хоста.  
+> База данных сохраняется в Docker volume.
+
+## Локальный запуск без Docker Compose
+
+### 1. Поднять PostgreSQL
+
+```bash
+make postgres-up
+```
+
+Если контейнер уже существует, можно использовать:
+
+```bash
+make postgres-start
+```
+
+### 2. Запустить приложение
+
+```bash
+make run
+```
+
+Подключиться к базе:
+
+```bash
+make postgres-connect
+```
+
+Остановить или удалить контейнер с базой:
+
+```bash
+make postgres-stop
+make postgres-rm
+```
+
 ## Gophermart: примеры curl-запросов
 
 > После успешного `register` или `login` взять JWT из заголовка `Authorization` ответа и подставить его вместо `<jwt-token>`.
@@ -71,6 +132,7 @@ curl -i -X POST http://localhost:8080/api/user/balance/withdraw \
     "order": "2377225624",
     "sum": 5.11
   }'
+```
 
 ### Получение истории списаний
 

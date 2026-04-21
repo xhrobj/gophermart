@@ -1,4 +1,5 @@
 .PHONY: run \
+		run-dev run-dev-down run-dev-logs \
 		build clean \
 		test test-race test-integration test-coverage \
 		lint \
@@ -21,6 +22,15 @@ run: build
 		-a $(RUN_ADDRESS) \
 		-d "$(POSTGRES_DSN)" \
 		-r "$(ACCRUAL_SYSTEM_ADDRESS)"
+
+run-dev:
+	docker compose up --build
+
+run-dev-down:
+	docker compose down
+
+run-dev-logs:
+	docker compose logs -f
 
 build:
 	go build -o $(APP_PATH) ./cmd/gophermart

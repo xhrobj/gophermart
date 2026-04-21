@@ -18,7 +18,6 @@ cmd/gophermart/gophermart
 vendor/
 
 # IDEs directories
-.idea
 .vscode
 
 #macOS
