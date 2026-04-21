@@ -229,7 +229,7 @@ func TestRegister_PasswordTooLong(t *testing.T) {
 
 	require.Equal(t, http.StatusBadRequest, rs.StatusCode)
 	require.Equal(t, "text/plain; charset=utf-8", rs.Header.Get("Content-Type"))
-	require.Equal(t, "Пароль слишком длинный. Попробуйте более короткий пароль.\n", string(body))
+	require.Equal(t, "Пароль слишком длинный. Попробуйте более короткий пароль.", string(body))
 }
 
 func TestLogin_OK(t *testing.T) {

@@ -45,8 +45,10 @@ func Register(authService service.AuthService) http.HandlerFunc {
 			case errors.Is(err, service.ErrInvalidAuthInput):
 				w.WriteHeader(http.StatusBadRequest)
 			case errors.Is(err, service.ErrPasswordTooLong):
-				const registerPasswordTooLongMessage = "Пароль слишком длинный. Попробуйте более короткий пароль."
-				http.Error(w, registerPasswordTooLongMessage, http.StatusBadRequest)
+				const msg = "Пароль слишком длинный. Попробуйте более короткий пароль."
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(msg))
 			case errors.Is(err, service.ErrLoginAlreadyExists):
 				w.WriteHeader(http.StatusConflict)
 			default:
