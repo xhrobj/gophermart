@@ -18,6 +18,10 @@
 
 Техническое задание - см. [SPECIFICATION.md](SPECIFICATION.md)
 
+## Локальный запуск
+
+Локально проект можно запускать как в backend-only режиме, так и в полном режиме через Docker Compose: PostgreSQL + Gophermart API + web-клиент.
+
 ## Локальный запуск через Docker Compose
 
 Поднять приложение и PostgreSQL:
@@ -28,7 +32,8 @@ make run-dev
 
 После старта будут доступны:
 
-- API: `http://localhost:8080`
+- Frontend Client: `http://localhost:3000`
+- Backend API: `http://localhost:8080`
 - PostgreSQL: `localhost:5432`
 
 Остановить окружение:
@@ -47,6 +52,9 @@ make run-dev-logs
 > База данных сохраняется в Docker volume.
 
 ## Локальный запуск без Docker Compose
+
+Этот сценарий поднимает backend и PostgreSQL без клиентского контейнера.
+Для полного локального окружения с web-клиентом - использовать запуск через Docker Compose (описан выше).
 
 ### 1. Поднять PostgreSQL
 
@@ -78,6 +86,17 @@ make postgres-connect
 make postgres-stop
 make postgres-rm
 ```
+
+## Полный локальный сценарий
+
+Для быстрого ручного прогона удобно использовать Docker Compose:
+
+1. Отрыть клиент: `http://localhost:3000`
+2. Зарегистрировать пользователя и выполнить вход
+3. Загрузить номер заказа
+4. Проверить баланс
+5. Выполнить списание баллов
+6. Проверить историю списаний
 
 ## Gophermart: примеры curl-запросов
 

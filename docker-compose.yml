@@ -32,5 +32,15 @@ services:
     ports:
       - "8080:8080"
 
+  client:
+    image: xhrobj/gophermart-client:latest
+    container_name: gophermart-client
+    depends_on:
+      - gophermart
+    environment:
+      GOPHERMART_UPSTREAM: http://gophermart:8080
+    ports:
+      - "3000:80"
+
 volumes:
   postgres_data:
