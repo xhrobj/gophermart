@@ -15,6 +15,7 @@ var (
 	ErrInvalidAuthInput   = errors.New("invalid auth input")
 	ErrLoginAlreadyExists = errors.New("login already exists")
 	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrPasswordTooLong    = errors.New("password too long")
 )
 
 // AuthService описывает операции регистрации и аутентификации пользователей.
@@ -68,6 +69,10 @@ func (s *authService) Register(ctx context.Context, login, password string) (mod
 
 	passwordHash, err := s.passwordManager.Hash(password)
 	if err != nil {
+		if errors.Is(err, auth.ErrPasswordTooLong) {
+			return model.AuthResult{}, ErrPasswordTooLong
+		}
+
 		return model.AuthResult{}, fmt.Errorf("hash password: %w", err)
 	}
 

@@ -1,5 +1,11 @@
 package auth
 
+import "errors"
+
+// ErrPasswordTooLong означает, что пароль превышает допустимую длину для алгоритма хеширования.
+// Актуально для bcrypt.
+var ErrPasswordTooLong = errors.New("password too long")
+
 // PasswordManager описывает операции хеширования и проверки паролей.
 type PasswordManager interface {
 	// Hash возвращает хеш пароля.

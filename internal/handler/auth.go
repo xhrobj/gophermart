@@ -22,7 +22,7 @@ type authRequest struct {
 //
 // Возможные коды ответа:
 //   - 200 -> пользователь успешно зарегистрирован и аутентифицирован
-//   - 400 -> неверный формат запроса
+//   - 400 -> неверный JSON, невалидные регистрационные данные или слишком длинный пароль
 //   - 409 -> логин уже занят
 //   - 500 -> внутренняя ошибка сервера
 func Register(authService service.AuthService) http.HandlerFunc {
@@ -44,6 +44,9 @@ func Register(authService service.AuthService) http.HandlerFunc {
 			switch {
 			case errors.Is(err, service.ErrInvalidAuthInput):
 				w.WriteHeader(http.StatusBadRequest)
+			case errors.Is(err, service.ErrPasswordTooLong):
+				const registerPasswordTooLongMessage = "Пароль слишком длинный. Попробуйте более короткий пароль."
+				http.Error(w, registerPasswordTooLongMessage, http.StatusBadRequest)
 			case errors.Is(err, service.ErrLoginAlreadyExists):
 				w.WriteHeader(http.StatusConflict)
 			default:

@@ -200,6 +200,38 @@ func TestRegister_LoginAlreadyExists(t *testing.T) {
 	require.Equal(t, http.StatusConflict, rs.StatusCode)
 }
 
+func TestRegister_PasswordTooLong(t *testing.T) {
+	authService := &stubAuthService{
+		registerFunc: func(ctx context.Context, login, password string) (model.AuthResult, error) {
+			return model.AuthResult{}, service.ErrPasswordTooLong
+		},
+	}
+
+	r := newTestRouter(authService, &stubOrderService{})
+
+	rq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user/register",
+		bytes.NewBufferString(`{"login":"admin","password":"secret"}`),
+	)
+	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	body, err := io.ReadAll(rs.Body)
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusBadRequest, rs.StatusCode)
+	require.Equal(t, "text/plain; charset=utf-8", rs.Header.Get("Content-Type"))
+	require.Equal(t, "Пароль слишком длинный. Попробуйте более короткий пароль.\n", string(body))
+}
+
 func TestLogin_OK(t *testing.T) {
 	authService := &stubAuthService{
 		loginFunc: func(ctx context.Context, login, password string) (model.AuthResult, error) {

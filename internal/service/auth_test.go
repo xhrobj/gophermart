@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xhrobj/gophermart/internal/auth"
 	"github.com/xhrobj/gophermart/internal/model"
 	"github.com/xhrobj/gophermart/internal/repository"
 )
@@ -141,6 +142,25 @@ func TestAuthService_Register_LoginAlreadyExists(t *testing.T) {
 
 	_, err := svc.Register(context.Background(), "admin", "secret")
 	require.ErrorIs(t, err, ErrLoginAlreadyExists)
+}
+
+func TestAuthService_Register_PasswordTooLong(t *testing.T) {
+	t.Parallel()
+
+	userRepo := &stubUserRepo{}
+
+	passwordManager := &stubPasswordManager{
+		hashFunc: func(password string) (string, error) {
+			return "", auth.ErrPasswordTooLong
+		},
+	}
+
+	tokenManager := &stubTokenManager{}
+
+	svc := NewAuthService(userRepo, passwordManager, tokenManager)
+
+	_, err := svc.Register(context.Background(), "admin", "secret")
+	require.ErrorIs(t, err, ErrPasswordTooLong)
 }
 
 func TestAuthService_Login_OK(t *testing.T) {

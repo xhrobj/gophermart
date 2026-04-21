@@ -66,7 +66,7 @@ func run() error {
 	echoBanner()
 
 	userRepo := repository.NewPostgresUserRepository(db)
-	passwordManager := auth.NewSHA256PasswordManager()
+	passwordManager := auth.NewBcryptPasswordManager()
 	tokenManager := auth.NewJWTTokenManager(cfg.JWTSecret, 24*time.Hour)
 	authService := service.NewAuthService(userRepo, passwordManager, tokenManager)
 
