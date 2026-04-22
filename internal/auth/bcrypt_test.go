@@ -1,12 +1,10 @@
 package auth
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func TestBcryptPasswordManager_HashAndCheck_OK(t *testing.T) {
@@ -41,5 +39,5 @@ func TestBcryptPasswordManager_Hash_PasswordTooLong(t *testing.T) {
 
 	_, err := manager.Hash(password)
 	require.Error(t, err)
-	require.True(t, errors.Is(err, bcrypt.ErrPasswordTooLong))
+	require.ErrorIs(t, err, ErrPasswordTooLong)
 }

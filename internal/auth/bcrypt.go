@@ -25,6 +25,10 @@ func NewBcryptPasswordManager() *BcryptPasswordManager {
 func (m *BcryptPasswordManager) Hash(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), m.cost)
 	if err != nil {
+		if errors.Is(err, bcrypt.ErrPasswordTooLong) {
+			return "", ErrPasswordTooLong
+		}
+
 		return "", err
 	}
 
