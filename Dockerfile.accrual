@@ -1,0 +1,11 @@
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+COPY cmd/accrual/accrual_linux_amd64 /app/accrual
+
+RUN chmod +x /app/accrual
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/accrual"]

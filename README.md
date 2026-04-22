@@ -20,11 +20,11 @@
 
 ## Локальный запуск
 
-Локально проект можно запускать как в backend-only режиме, так и в полном режиме через Docker Compose: PostgreSQL + Gophermart API + web-клиент.
+Локально проект можно запускать как в backend-only режиме, так и в полном режиме через Docker Compose: PostgreSQL + Gophermart API + accrual + web-клиент.
 
 ## Локальный запуск через Docker Compose
 
-Поднять приложение и PostgreSQL:
+Поднять приложение и PostgreSQL, accrual и web-клиент:
 
 ```bash
 make run-dev
@@ -32,9 +32,14 @@ make run-dev
 
 После старта будут доступны:
 
-- Frontend Client: `http://localhost:3000`
 - Backend API: `http://localhost:8080`
+- Accrual API: `http://localhost:8081`
 - PostgreSQL: `localhost:5432`
+- Frontend Client: `http://localhost:3000`
+
+<p align="center">
+  <img src="docs/readme/gophermart-client.png" alt="Gophermart Client" width="1100">
+</p>
 
 Остановить окружение:
 
@@ -48,13 +53,15 @@ make run-dev-down
 make run-dev-logs
 ```
 
-> В `docker-compose.yml` сервис запускается с `RUN_ADDRESS=:8080`, чтобы приложение было доступно с хоста.  
-> База данных сохраняется в Docker volume.
+> В `docker-compose.yml` backend запускается с `RUN_ADDRESS=:8080`, чтобы API было доступно с хоста. База данных сохраняется в Docker volume.
+> `accrual` поднимается отдельным контейнером и доступен для `gophermart` внутри compose-сети по адресу `http://accrual:8080`, а с хоста - по `http://localhost:8081`.
+> Web-клиент поднимается отдельным контейнером и проксирует запросы в backend через `GOPHERMART_UPSTREAM=http://gophermart:8080`.
 
 ## Локальный запуск без Docker Compose
 
-Этот сценарий поднимает backend и PostgreSQL без клиентского контейнера.
-Для полного локального окружения с web-клиентом - использовать запуск через Docker Compose (описан выше).
+Этот сценарий поднимает backend и PostgreSQL без контейнеров `client` и `accrual`.
+
+Для полного локального окружения с web-клиентом и accrual использовать запуск через Docker Compose (описан выше).
 
 ### 1. Поднять PostgreSQL
 
