@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -164,10 +165,87 @@ func (r *PostgresOrderRepository) ListByUserID(ctx context.Context, userID int64
 	return orders, nil
 }
 
+// выбирает NEW и PROCESSING только с next_poll_at <= now
 func (r *PostgresOrderRepository) ListPending(ctx context.Context, limit int) ([]model.Order, error) {
-	panic("¯＼_(ツ)_/¯")
+	const query = `
+		SELECT
+			id,
+			number,
+			user_id,
+			status,
+			accrual,
+			uploaded_at
+		FROM orders
+		WHERE status IN ('NEW', 'PROCESSING')
+		  AND next_poll_at <= now()
+		ORDER BY next_poll_at ASC, uploaded_at ASC, id ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list pending orders: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	orders := make([]model.Order, 0, limit)
+
+	for rows.Next() {
+		var order model.Order
+
+		err = rows.Scan(
+			&order.ID,
+			&order.Number,
+			&order.UserID,
+			&order.Status,
+			&order.Accrual,
+			&order.UploadedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan pending order row: %w", err)
+		}
+
+		orders = append(orders, order)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pending order rows: %w", err)
+	}
+
+	return orders, nil
 }
 
 func (r *PostgresOrderRepository) SetAccrualResult(ctx context.Context, orderNumber string, status model.OrderStatus, accrual int64) error {
-	panic("¯＼_(ツ)_/¯")
+	const query = `
+		UPDATE orders
+		SET
+			status = $2,
+			accrual = $3,
+			next_poll_at = $4
+		WHERE number = $1
+	`
+
+	result, err := r.db.ExecContext(
+		ctx,
+		query,
+		orderNumber,
+		status,
+		accrual,
+		time.Now(),
+	)
+	if err != nil {
+		return fmt.Errorf("set accrual result: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("set accrual result rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrOrderNotFound
+	}
+
+	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/xhrobj/gophermart/internal/accrual"
 	"github.com/xhrobj/gophermart/internal/auth"
 	"github.com/xhrobj/gophermart/internal/config"
 	"github.com/xhrobj/gophermart/internal/database"
@@ -15,6 +16,7 @@ import (
 	"github.com/xhrobj/gophermart/internal/repository"
 	"github.com/xhrobj/gophermart/internal/router"
 	"github.com/xhrobj/gophermart/internal/service"
+	"github.com/xhrobj/gophermart/internal/worker"
 	"go.uber.org/zap"
 )
 
@@ -55,12 +57,25 @@ func run() error {
 
 	lg.Info("database migrations are up to date")
 
+	orderRepo := repository.NewPostgresOrderRepository(db)
+	orderService := service.NewOrderService(orderRepo)
+
+	var accrualWorker *worker.AccrualWorker
+
 	if cfg.AccrualSystemAddress == "" {
 		lg.Info("accrual system address is empty")
 	} else {
 		lg.Info("accrual system address is configured",
 			zap.String("address", cfg.AccrualSystemAddress),
 		)
+
+		accrualClient := accrual.NewClient(cfg.AccrualSystemAddress)
+		accrualService := service.NewAccrualService(orderRepo, accrualClient, lg)
+		accrualWorker = worker.NewAccrualWorker(accrualService, lg)
+	}
+
+	if accrualWorker != nil {
+		go accrualWorker.Run(ctx)
 	}
 
 	echoBanner()
@@ -69,9 +84,6 @@ func run() error {
 	passwordManager := auth.NewBcryptPasswordManager()
 	tokenManager := auth.NewJWTTokenManager(cfg.JWTSecret, 24*time.Hour)
 	authService := service.NewAuthService(userRepo, passwordManager, tokenManager)
-
-	orderRepo := repository.NewPostgresOrderRepository(db)
-	orderService := service.NewOrderService(orderRepo)
 
 	balanceRepo := repository.NewPostgresBalanceRepository(db)
 	balanceService := service.NewBalanceService(balanceRepo)

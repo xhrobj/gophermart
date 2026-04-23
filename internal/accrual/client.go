@@ -2,6 +2,14 @@ package accrual
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
 
 	"github.com/xhrobj/gophermart/internal/model"
 )
@@ -10,4 +18,75 @@ import (
 type Client interface {
 	// FetchOrderAccrual запрашивает во внешнем сервисе результат начисления по номеру заказа.
 	FetchOrderAccrual(ctx context.Context, orderNumber string) (model.AccrualResult, error)
+}
+
+type HTTPClient struct {
+	baseURL    string
+	httpClient *http.Client
+}
+
+func NewClient(baseURL string) *HTTPClient {
+	return &HTTPClient{
+		baseURL: strings.TrimRight(baseURL, "/"),
+		httpClient: &http.Client{
+			Timeout: 5 * time.Second,
+		},
+	}
+}
+
+type fetchOrderAccrualResponse struct {
+	Order   string              `json:"order"`
+	Status  model.AccrualStatus `json:"status"`
+	Accrual *float64            `json:"accrual,omitempty"`
+}
+
+func (c *HTTPClient) FetchOrderAccrual(ctx context.Context, orderNumber string) (model.AccrualResult, error) {
+	requestURL := c.baseURL + "/api/orders/" + url.PathEscape(orderNumber)
+
+	rq, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return model.AccrualResult{}, fmt.Errorf("build accrual request: %w", err)
+	}
+
+	rs, err := c.httpClient.Do(rq)
+	if err != nil {
+		return model.AccrualResult{}, fmt.Errorf("perform accrual request: %w", err)
+	}
+	defer func() {
+		_ = rs.Body.Close()
+	}()
+
+	switch rs.StatusCode {
+	case http.StatusOK:
+		var payload fetchOrderAccrualResponse
+
+		if err = json.NewDecoder(rs.Body).Decode(&payload); err != nil {
+			return model.AccrualResult{}, fmt.Errorf("decode accrual response: %w", err)
+		}
+
+		result := model.AccrualResult{
+			Order:  payload.Order,
+			Status: payload.Status,
+		}
+
+		if result.Order == "" {
+			result.Order = orderNumber
+		}
+
+		if payload.Accrual != nil {
+			result.Accrual = amountToHundredths(*payload.Accrual)
+		}
+
+		return result, nil
+
+	case http.StatusNoContent:
+		return model.AccrualResult{}, errors.New("order not registered in accrual")
+
+	default:
+		return model.AccrualResult{}, fmt.Errorf("unexpected response status: %d", rs.StatusCode)
+	}
+}
+
+func amountToHundredths(amount float64) int64 {
+	return int64(math.Round(amount * 100))
 }
