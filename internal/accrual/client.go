@@ -8,13 +8,33 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/xhrobj/gophermart/internal/model"
 )
 
-var ErrOrderNotRegistered = errors.New("order not registered in accrual system")
+var (
+	// ErrOrderNotRegistered возвращается, когда заказ не зарегистрирован в accrual.
+	ErrOrderNotRegistered = errors.New("order not registered in accrual system")
+
+	// ErrRateLimited возвращается, когда accrual ограничил частоту запросов.
+	ErrRateLimited = errors.New("accrual rate limit exceeded")
+)
+
+// RateLimitError описывает ответ accrual 429 Too Many Requests.
+type RateLimitError struct {
+	RetryAfter time.Duration
+}
+
+func (e *RateLimitError) Error() string {
+	return fmt.Sprintf("%v: retry after %s", ErrRateLimited, e.RetryAfter)
+}
+
+func (e *RateLimitError) Unwrap() error {
+	return ErrRateLimited
+}
 
 // Client описывает клиент для обращения к внешнему сервису начислений.
 type Client interface {
@@ -86,6 +106,10 @@ func (c *HTTPClient) FetchOrderAccrual(ctx context.Context, orderNumber string) 
 	case http.StatusNoContent:
 		return model.AccrualResult{}, ErrOrderNotRegistered
 
+	case http.StatusTooManyRequests:
+		retryAfter := parseRetryAfter(rs.Header.Get("Retry-After"), time.Now())
+		return model.AccrualResult{}, &RateLimitError{RetryAfter: retryAfter}
+
 	default:
 		return model.AccrualResult{}, fmt.Errorf("unexpected response status: %d", rs.StatusCode)
 	}
@@ -93,4 +117,23 @@ func (c *HTTPClient) FetchOrderAccrual(ctx context.Context, orderNumber string) 
 
 func amountToHundredths(amount float64) int64 {
 	return int64(math.Round(amount * 100))
+}
+
+func parseRetryAfter(value string, now time.Time) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+
+	seconds, err := strconv.Atoi(value)
+	if err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+
+	retryAt, err := http.ParseTime(value)
+	if err == nil && retryAt.After(now) {
+		return retryAt.Sub(now)
+	}
+
+	return 0
 }
