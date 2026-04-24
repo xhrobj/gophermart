@@ -24,7 +24,7 @@ type stubOrderRepo struct {
 	findByNumberFunc     func(ctx context.Context, orderNumber string) (model.Order, error)
 	listByUserIDFunc     func(ctx context.Context, userID int64) ([]model.Order, error)
 	listPendingFunc      func(ctx context.Context, limit int) ([]model.Order, error)
-	setAccrualResultFunc func(ctx context.Context, orderNumber string, status model.OrderStatus, accrual int64) error
+	setAccrualResultFunc func(ctx context.Context, orderNumber string, update repository.OrderAccrualUpdate) error
 }
 
 func (s *stubOrderRepo) Create(ctx context.Context, userID int64, orderNumber string) (model.Order, error) {
@@ -59,12 +59,12 @@ func (s *stubOrderRepo) ListPending(ctx context.Context, limit int) ([]model.Ord
 	return s.listPendingFunc(ctx, limit)
 }
 
-func (s *stubOrderRepo) SetAccrualResult(ctx context.Context, orderNumber string, status model.OrderStatus, accrual int64) error {
+func (s *stubOrderRepo) SetAccrualResult(ctx context.Context, orderNumber string, update repository.OrderAccrualUpdate) error {
 	if s.setAccrualResultFunc == nil {
 		panic("unexpected call to stubOrderRepo.SetAccrualResult")
 	}
 
-	return s.setAccrualResultFunc(ctx, orderNumber, status, accrual)
+	return s.setAccrualResultFunc(ctx, orderNumber, update)
 }
 
 func TestOrderService_UploadOrder_Accepted(t *testing.T) {

@@ -2,12 +2,19 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/xhrobj/gophermart/internal/accrual"
 	"github.com/xhrobj/gophermart/internal/model"
 	"github.com/xhrobj/gophermart/internal/repository"
 	"go.uber.org/zap"
+)
+
+const (
+	pendingOrdersSize = 100
+	nextPollDelay     = time.Second * 30
 )
 
 // AccrualService описывает обработку заказов через внешний сервис начислений.
@@ -42,7 +49,7 @@ func (s *accrualService) ProcessPendingOrders(ctx context.Context) error {
 	// вызываем repository.ListPending
 	//   -> ListPending возвращает заказы, ожидающие проверки во внешнем сервисе начислений
 
-	orders, err := s.orderRepo.ListPending(ctx, 0)
+	orders, err := s.orderRepo.ListPending(ctx, pendingOrdersSize)
 	if err != nil {
 		return fmt.Errorf("list pending orders: %w", err)
 	}
@@ -61,6 +68,21 @@ func (s *accrualService) ProcessPendingOrders(ctx context.Context) error {
 		result, fetchErr := s.accrualClient.FetchOrderAccrual(ctx, order.Number)
 		// обычная ошибка -> log and continue
 		if fetchErr != nil {
+			if errors.Is(fetchErr, accrual.ErrOrderNotRegistered) {
+				update := repository.OrderAccrualUpdate{
+					Status:     model.OrderStatusNew,
+					Accrual:    0,
+					NextPollAt: time.Now().UTC().Add(nextPollDelay),
+				}
+
+				err = s.orderRepo.SetAccrualResult(ctx, order.Number, update)
+				if err != nil {
+					return fmt.Errorf("set accrual result for unregistered order %s: %w", order.Number, err)
+				}
+
+				continue
+			}
+
 			s.logger.Warn(
 				"fetch accrual result failed",
 				zap.String("order_number", order.Number),
@@ -77,28 +99,28 @@ func (s *accrualService) ProcessPendingOrders(ctx context.Context) error {
 		//     - PROCESSED -> PROCESSED + accrual, final
 		// TODO: - 429 -> cooldown + stop pass
 
-		status := model.OrderStatusNew
-		accrual := int64(0)
+		update := repository.OrderAccrualUpdate{
+			Status:     model.OrderStatusNew,
+			Accrual:    0,
+			NextPollAt: time.Now().UTC().Add(nextPollDelay),
+		}
 
 		switch result.Status {
-		case model.AccrualStatusRegistered:
-			status = model.OrderStatusProcessing
-
-		case model.AccrualStatusProcessing:
-			status = model.OrderStatusProcessing
+		case model.AccrualStatusRegistered, model.AccrualStatusProcessing:
+			update.Status = model.OrderStatusProcessing
 
 		case model.AccrualStatusInvalid:
-			status = model.OrderStatusInvalid
+			update.Status = model.OrderStatusInvalid
 
 		case model.AccrualStatusProcessed:
-			status = model.OrderStatusProcessed
-			accrual = result.Accrual
+			update.Status = model.OrderStatusProcessed
+			update.Accrual = result.Accrual
 		}
 
 		// - вызываем SetAccrualResult
 		//     -> SetAccrualResult сохраняет результат проверки заказа во внешнем сервисе начислений
 
-		err = s.orderRepo.SetAccrualResult(ctx, order.Number, status, accrual)
+		err = s.orderRepo.SetAccrualResult(ctx, order.Number, update)
 		if err != nil {
 			return fmt.Errorf("set accrual result for order %s: %w", order.Number, err)
 		}

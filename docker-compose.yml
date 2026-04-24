@@ -48,8 +48,10 @@ services:
     container_name: gophermart-client
     depends_on:
       - gophermart
+      - accrual
     environment:
       GOPHERMART_UPSTREAM: http://gophermart:8080
+      ACCRUAL_SYSTEM_ADDRESS: "http://accrual:8080"
     ports:
       - "3000:80"
 

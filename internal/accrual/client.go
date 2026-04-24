@@ -14,17 +14,21 @@ import (
 	"github.com/xhrobj/gophermart/internal/model"
 )
 
+var ErrOrderNotRegistered = errors.New("order not registered in accrual system")
+
 // Client описывает клиент для обращения к внешнему сервису начислений.
 type Client interface {
 	// FetchOrderAccrual запрашивает во внешнем сервисе результат начисления по номеру заказа.
 	FetchOrderAccrual(ctx context.Context, orderNumber string) (model.AccrualResult, error)
 }
 
+// HTTPClient реализует Client поверх HTTP.
 type HTTPClient struct {
 	baseURL    string
 	httpClient *http.Client
 }
 
+// NewClient создает HTTP-клиент внешнего сервиса начислений.
 func NewClient(baseURL string) *HTTPClient {
 	return &HTTPClient{
 		baseURL: strings.TrimRight(baseURL, "/"),
@@ -80,7 +84,7 @@ func (c *HTTPClient) FetchOrderAccrual(ctx context.Context, orderNumber string) 
 		return result, nil
 
 	case http.StatusNoContent:
-		return model.AccrualResult{}, errors.New("order not registered in accrual")
+		return model.AccrualResult{}, ErrOrderNotRegistered
 
 	default:
 		return model.AccrualResult{}, fmt.Errorf("unexpected response status: %d", rs.StatusCode)

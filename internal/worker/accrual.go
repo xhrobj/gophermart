@@ -30,11 +30,20 @@ func NewAccrualWorker(
 func (w *AccrualWorker) Run(ctx context.Context) {
 	w.logger.Info(" --> accrual worker started")
 
+	w.runOnce(ctx)
+
 	ticker := time.NewTicker(time.Second * 10)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		w.runOnce(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			w.logger.Info("accrual worker stopped <--")
+			return
+
+		case <-ticker.C:
+			w.runOnce(ctx)
+		}
 	}
 }
 

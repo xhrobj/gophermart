@@ -20,6 +20,12 @@ var (
 	ErrOrderAlreadyExists = errors.New("order already exists")
 )
 
+type OrderAccrualUpdate struct {
+	Status     model.OrderStatus
+	Accrual    int64
+	NextPollAt time.Time
+}
+
 // OrderRepository описывает операции хранения заказов.
 type OrderRepository interface {
 	// Create создает новый заказ пользователя.
@@ -35,7 +41,7 @@ type OrderRepository interface {
 	ListPending(ctx context.Context, limit int) ([]model.Order, error)
 
 	// SetAccrualResult сохраняет результат проверки заказа во внешнем сервисе начислений.
-	SetAccrualResult(ctx context.Context, orderNumber string, status model.OrderStatus, accrual int64) error
+	SetAccrualResult(ctx context.Context, orderNumber string, update OrderAccrualUpdate) error
 }
 
 // PostgresOrderRepository реализует OrderRepository поверх PostgreSQL.
@@ -179,9 +185,10 @@ func (r *PostgresOrderRepository) ListPending(ctx context.Context, limit int) ([
 		WHERE status IN ('NEW', 'PROCESSING')
 		  AND next_poll_at <= now()
 		ORDER BY next_poll_at ASC, uploaded_at ASC, id ASC
+		LIMIT $1
 	`
 
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.db.QueryContext(ctx, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list pending orders: %w", err)
 	}
@@ -216,7 +223,7 @@ func (r *PostgresOrderRepository) ListPending(ctx context.Context, limit int) ([
 	return orders, nil
 }
 
-func (r *PostgresOrderRepository) SetAccrualResult(ctx context.Context, orderNumber string, status model.OrderStatus, accrual int64) error {
+func (r *PostgresOrderRepository) SetAccrualResult(ctx context.Context, orderNumber string, update OrderAccrualUpdate) error {
 	const query = `
 		UPDATE orders
 		SET
@@ -230,9 +237,9 @@ func (r *PostgresOrderRepository) SetAccrualResult(ctx context.Context, orderNum
 		ctx,
 		query,
 		orderNumber,
-		status,
-		accrual,
-		time.Now(),
+		update.Status,
+		update.Accrual,
+		update.NextPollAt.UTC(),
 	)
 	if err != nil {
 		return fmt.Errorf("set accrual result: %w", err)
