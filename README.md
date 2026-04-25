@@ -1,5 +1,7 @@
 # (^.^)~ Gophermart
 
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_gophermart&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=xhrobj_gophermart)
+
 ```text
   ________              .__                                        __   
  /  _____/  ____ ______ |  |__   ___________  _____ _____ ________/  |_ 
@@ -59,7 +61,15 @@ make run-dev-logs
 
 ## Полный локальный сценарий
 
-Для быстрого ручного прогона удобно использовать Docker Compose:
+Для быстрого ручного прогона удобно использовать Docker Compose.
+
+Перед началом убедитесь, что Docker запущен, и поднимите локальное окружение:
+
+```bash
+make run-dev
+```
+
+После запуска:
 
 1. Открыть клиент: `http://localhost:3000`
 2. Зарегистрировать пользователя и выполнить вход
@@ -86,7 +96,3 @@ make run-dev-logs
 ## Локальная разработка
 
 Подробная инструкция по локальной разработке, curl-примеры, конфигурация и Makefile-команды описаны в [docs/local-dev.md](docs/local-dev.md)
-
----
-
-[![SonarQube Cloud](https://sonarcloud.io/images/project_badges/sonarcloud-highlight.svg)](https://sonarcloud.io/summary/new_code?id=xhrobj_gophermart)
