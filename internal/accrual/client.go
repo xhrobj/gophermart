@@ -36,13 +36,13 @@ func (e *RateLimitError) Unwrap() error {
 	return ErrRateLimited
 }
 
-// Client описывает клиент для обращения к внешнему сервису начислений.
-type Client interface {
+// OrderAccrualFetcher описывает клиент для обращения к внешнему сервису начислений.
+type OrderAccrualFetcher interface {
 	// FetchOrderAccrual запрашивает во внешнем сервисе результат начисления по номеру заказа.
 	FetchOrderAccrual(ctx context.Context, orderNumber string) (model.AccrualResult, error)
 }
 
-// HTTPClient реализует Client поверх HTTP.
+// HTTPClient реализует OrderAccrualFetcher поверх HTTP.
 type HTTPClient struct {
 	baseURL    string
 	httpClient *http.Client

@@ -11,13 +11,13 @@ import (
 
 // AccrualWorker периодически запускает обработку заказов через внешний сервис accrual.
 type AccrualWorker struct {
-	accrualService service.AccrualService
+	accrualService service.PendingOrdersProcessor
 	logger         *zap.Logger
 }
 
 // NewAccrualWorker создаёт worker для периодического polling заказов в accrual.
 func NewAccrualWorker(
-	accrualService service.AccrualService,
+	accrualService service.PendingOrdersProcessor,
 	logger *zap.Logger,
 ) *AccrualWorker {
 	if logger == nil {

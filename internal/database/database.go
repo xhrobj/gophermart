@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	// Регистрирует PostgreSQL-драйвер pgx для database/sql.
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 

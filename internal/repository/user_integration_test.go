@@ -7,7 +7,9 @@ import (
 	"database/sql"
 	"testing"
 
+	// Регистрирует PostgreSQL-драйвер pgx для database/sql.
 	_ "github.com/jackc/pgx/v5/stdlib"
+
 	"github.com/stretchr/testify/require"
 )
 

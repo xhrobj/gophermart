@@ -6,7 +6,11 @@ import (
 	"os"
 
 	"github.com/golang-migrate/migrate/v4"
+
+	// Регистрирует PostgreSQL-драйвер для golang-migrate.
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+
+	// Регистрирует file source-драйвер для чтения миграций из локальной файловой системы.
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 

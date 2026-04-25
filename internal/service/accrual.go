@@ -20,15 +20,15 @@ const (
 	defaultRetryAfter  = time.Second * 60
 )
 
-// AccrualService описывает обработку заказов через внешний сервис начислений.
-type AccrualService interface {
+// PendingOrdersProcessor описывает обработку заказов через внешний сервис начислений.
+type PendingOrdersProcessor interface {
 	// ProcessPendingOrders обрабатывает заказы, ожидающие проверки во внешнем сервисе начислений.
 	ProcessPendingOrders(ctx context.Context) error
 }
 
 type accrualService struct {
 	orderRepo     repository.OrderRepository
-	accrualClient accrual.Client
+	accrualClient accrual.OrderAccrualFetcher
 	logger        *zap.Logger
 
 	rateLimitMu    sync.Mutex
@@ -38,9 +38,9 @@ type accrualService struct {
 // NewAccrualService создаёт сервис обработки заказов через внешний сервис начислений.
 func NewAccrualService(
 	orderRepo repository.OrderRepository,
-	accrualClient accrual.Client,
+	accrualClient accrual.OrderAccrualFetcher,
 	logger *zap.Logger,
-) AccrualService {
+) PendingOrdersProcessor {
 	return &accrualService{
 		orderRepo:     orderRepo,
 		accrualClient: accrualClient,
