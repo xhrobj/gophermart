@@ -20,19 +20,24 @@
 Поднять Gophermart API, PostgreSQL, accrual и web-клиент:
 
 ```bash
-make run-dev
+make
 ```
 
-После старта будут доступны:
+или ```make run-dev```
 
-- Backend API: `http://localhost:8080`
-- Accrual API: `http://localhost:8081`
-- PostgreSQL: `localhost:5432`
-- Frontend Client: `http://localhost:3000`
+После старта будет доступен:
+
+- Frontend Gophermart Client: `http://localhost:3000`
 
 <p align="center">
   <img src="docs/readme/gophermart-client.png" alt="Gophermart Client" width="1100">
 </p>
+
+Также будут доступны:
+
+- Backend API: `http://localhost:8080`
+- Accrual API: `http://localhost:8081`
+- PostgreSQL: `localhost:5432`
 
 Остановить окружение:
 
