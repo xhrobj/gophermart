@@ -1,6 +1,6 @@
 # (^.^)~ Gophermart
 
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_gophermart&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=xhrobj_gophermart)
+[![(-_-) GO CI](https://github.com/xhrobj/gophermart/actions/workflows/go-ci.yml/badge.svg?branch=feature%2Fgophermart)](https://github.com/xhrobj/gophermart/actions/workflows/go-ci.yml) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_gophermart&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=xhrobj_gophermart)
 
 ```text
   ________              .__                                        __   
@@ -80,6 +80,10 @@ make run-dev
 7. Выполнить списание баллов
 8. Проверить историю списаний
 
+## Локальная разработка
+
+Подробная инструкция по локальной разработке, curl-примеры, конфигурация и Makefile-команды описаны в [docs/local-dev.md](docs/local-dev.md)
+
 ## Особенности реализации
 
 > Момент, который выглядит как бизнес-недоработка: если пользователь ошибётся при вводе номера заказа и отправит номер, который корректен по алгоритму Луна, но которого нет (и не будет) во внешнем `accrual`, такой заказ в текущей модели будет опрашиваться бесконечно долго - `gophermart` будет "вечно", с определённой периодичностью, запрашивать его статус в надежде, что он появится во внешней системе.
@@ -92,7 +96,3 @@ make run-dev
 
 Шаблон репозитория для индивидуального первого дипломного проекта курса «Go-разработчик»:
 [go-musthave-diploma-tpl](https://github.com/yandex-praktikum/go-musthave-diploma-tpl)
-
-## Локальная разработка
-
-Подробная инструкция по локальной разработке, curl-примеры, конфигурация и Makefile-команды описаны в [docs/local-dev.md](docs/local-dev.md)
