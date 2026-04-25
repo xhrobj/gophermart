@@ -1,0 +1,1206 @@
+package router
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	"github.com/xhrobj/gophermart/internal/auth"
+	"github.com/xhrobj/gophermart/internal/model"
+	"github.com/xhrobj/gophermart/internal/service"
+	"go.uber.org/zap"
+)
+
+const (
+	validLuhnOrderNumber   = "12345678903"
+	invalidLuhnOrderNumber = "12345678904"
+)
+
+type getOrdersResponseItem struct {
+	Number     string   `json:"number"`
+	Status     string   `json:"status"`
+	Accrual    *float64 `json:"accrual,omitempty"`
+	UploadedAt string   `json:"uploaded_at"`
+}
+
+type getBalanceResponse struct {
+	Current   float64 `json:"current"`
+	Withdrawn float64 `json:"withdrawn"`
+}
+
+type getWithdrawalsResponseItem struct {
+	Order       string  `json:"order"`
+	Sum         float64 `json:"sum"`
+	ProcessedAt string  `json:"processed_at"`
+}
+
+type stubAuthService struct {
+	registerFunc func(ctx context.Context, login, password string) (model.AuthResult, error)
+	loginFunc    func(ctx context.Context, login, password string) (model.AuthResult, error)
+}
+
+func (s *stubAuthService) Register(ctx context.Context, login, password string) (model.AuthResult, error) {
+	if s.registerFunc == nil {
+		panic("unexpected call to stubAuthService.Register")
+	}
+
+	return s.registerFunc(ctx, login, password)
+}
+
+func (s *stubAuthService) Login(ctx context.Context, login, password string) (model.AuthResult, error) {
+	if s.loginFunc == nil {
+		panic("unexpected call to stubAuthService.Login")
+	}
+
+	return s.loginFunc(ctx, login, password)
+}
+
+type stubOrderService struct {
+	uploadOrderFunc func(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error)
+	listOrdersFunc  func(ctx context.Context, userID int64) ([]model.Order, error)
+}
+
+func (s *stubOrderService) UploadOrder(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error) {
+	if s.uploadOrderFunc == nil {
+		panic("unexpected call to stubOrderService.UploadOrder")
+	}
+
+	return s.uploadOrderFunc(ctx, userID, orderNumber)
+}
+
+func (s *stubOrderService) ListOrders(ctx context.Context, userID int64) ([]model.Order, error) {
+	if s.listOrdersFunc == nil {
+		panic("unexpected call to stubOrderService.ListOrders")
+	}
+
+	return s.listOrdersFunc(ctx, userID)
+}
+
+type stubBalanceService struct {
+	getBalanceFunc      func(ctx context.Context, userID int64) (model.Balance, error)
+	withdrawFunc        func(ctx context.Context, userID int64, orderNumber string, sum int64) error
+	listWithdrawalsFunc func(ctx context.Context, userID int64) ([]model.Withdrawal, error)
+}
+
+func (s *stubBalanceService) GetBalance(ctx context.Context, userID int64) (model.Balance, error) {
+	if s.getBalanceFunc == nil {
+		panic("unexpected call to stubBalanceService.GetBalance")
+	}
+
+	return s.getBalanceFunc(ctx, userID)
+}
+
+func (s *stubBalanceService) Withdraw(ctx context.Context, userID int64, orderNumber string, sum int64) error {
+	if s.withdrawFunc == nil {
+		panic("unexpected call to stubBalanceService.Withdraw")
+	}
+
+	return s.withdrawFunc(ctx, userID, orderNumber, sum)
+}
+
+func (s *stubBalanceService) ListWithdrawals(ctx context.Context, userID int64) ([]model.Withdrawal, error) {
+	if s.listWithdrawalsFunc == nil {
+		panic("unexpected call to stubBalanceService.ListWithdrawals")
+	}
+
+	return s.listWithdrawalsFunc(ctx, userID)
+}
+
+type stubTokenManager struct {
+	generateFunc func(userID int64) (string, error)
+	parseFunc    func(token string) (int64, error)
+}
+
+func (s *stubTokenManager) Generate(userID int64) (string, error) {
+	if s.generateFunc == nil {
+		panic("unexpected call to stubTokenManager.Generate")
+	}
+
+	return s.generateFunc(userID)
+}
+
+func (s *stubTokenManager) Parse(token string) (int64, error) {
+	if s.parseFunc == nil {
+		panic("unexpected call to stubTokenManager.Parse")
+	}
+
+	return s.parseFunc(token)
+}
+
+func newTestRouter(authService service.AuthService, orderService service.OrderService) http.Handler {
+	return New(authService, orderService, &stubBalanceService{}, &stubTokenManager{}, zap.NewNop())
+}
+
+func TestRegister_OK(t *testing.T) {
+	authService := &stubAuthService{
+		registerFunc: func(ctx context.Context, login, password string) (model.AuthResult, error) {
+			require.Equal(t, "admin", login)
+			require.Equal(t, "secret", password)
+
+			return model.AuthResult{
+				UserID: 42,
+				Token:  "jwt-token",
+			}, nil
+		},
+	}
+
+	r := newTestRouter(authService, &stubOrderService{})
+
+	rq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user/register",
+		bytes.NewBufferString(`{"login":"admin","password":"secret"}`),
+	)
+	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusOK, rs.StatusCode)
+	require.Equal(t, "Bearer jwt-token", rs.Header.Get("Authorization"))
+}
+
+func TestRegister_LoginAlreadyExists(t *testing.T) {
+	authService := &stubAuthService{
+		registerFunc: func(ctx context.Context, login, password string) (model.AuthResult, error) {
+			return model.AuthResult{}, service.ErrLoginAlreadyExists
+		},
+	}
+
+	r := newTestRouter(authService, &stubOrderService{})
+
+	rq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user/register",
+		bytes.NewBufferString(`{"login":"admin","password":"secret"}`),
+	)
+	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusConflict, rs.StatusCode)
+}
+
+func TestRegister_PasswordTooLong(t *testing.T) {
+	authService := &stubAuthService{
+		registerFunc: func(ctx context.Context, login, password string) (model.AuthResult, error) {
+			return model.AuthResult{}, service.ErrPasswordTooLong
+		},
+	}
+
+	r := newTestRouter(authService, &stubOrderService{})
+
+	rq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user/register",
+		bytes.NewBufferString(`{"login":"admin","password":"secret"}`),
+	)
+	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	body, err := io.ReadAll(rs.Body)
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusBadRequest, rs.StatusCode)
+	require.Equal(t, "text/plain; charset=utf-8", rs.Header.Get("Content-Type"))
+	require.Equal(t, "Пароль слишком длинный. Попробуйте более короткий пароль.", string(body))
+}
+
+func TestLogin_OK(t *testing.T) {
+	authService := &stubAuthService{
+		loginFunc: func(ctx context.Context, login, password string) (model.AuthResult, error) {
+			require.Equal(t, "admin", login)
+			require.Equal(t, "secret", password)
+
+			return model.AuthResult{
+				UserID: 42,
+				Token:  "jwt-token",
+			}, nil
+		},
+	}
+
+	r := newTestRouter(authService, &stubOrderService{})
+
+	rq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user/login",
+		bytes.NewBufferString(`{"login":"admin","password":"secret"}`),
+	)
+	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusOK, rs.StatusCode)
+	require.Equal(t, "Bearer jwt-token", rs.Header.Get("Authorization"))
+}
+
+func TestLogin_InvalidCredentials(t *testing.T) {
+	authService := &stubAuthService{
+		loginFunc: func(ctx context.Context, login, password string) (model.AuthResult, error) {
+			return model.AuthResult{}, service.ErrInvalidCredentials
+		},
+	}
+
+	r := newTestRouter(authService, &stubOrderService{})
+
+	rq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user/login",
+		bytes.NewBufferString(`{"login":"admin","password":"wrong"}`),
+	)
+	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestUploadOrder_Unauthorized(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	tokenManager := &stubTokenManager{}
+
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(validLuhnOrderNumber))
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestUploadOrder_Accepted(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		uploadOrderFunc: func(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error) {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, validLuhnOrderNumber, orderNumber)
+
+			return model.UploadOrderResult{
+				Status: model.UploadOrderAccepted,
+			}, nil
+		},
+	}
+
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(validLuhnOrderNumber))
+	rq.Header.Set("Authorization", "Bearer good-token")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusAccepted, rs.StatusCode)
+}
+
+func TestUploadOrder_Duplicate(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		uploadOrderFunc: func(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error) {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, validLuhnOrderNumber, orderNumber)
+
+			return model.UploadOrderResult{
+				Status: model.UploadOrderDuplicate,
+			}, nil
+		},
+	}
+
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(validLuhnOrderNumber))
+	rq.Header.Set("Authorization", "Bearer good-token")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusOK, rs.StatusCode)
+}
+
+func TestUploadOrder_Conflict(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		uploadOrderFunc: func(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error) {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, validLuhnOrderNumber, orderNumber)
+
+			return model.UploadOrderResult{
+				Status: model.UploadOrderConflict,
+			}, nil
+		},
+	}
+
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(validLuhnOrderNumber))
+	rq.Header.Set("Authorization", "Bearer good-token")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusConflict, rs.StatusCode)
+}
+
+func TestUploadOrder_InvalidOrderInput(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		uploadOrderFunc: func(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error) {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, "   ", orderNumber)
+
+			return model.UploadOrderResult{}, service.ErrInvalidOrderInput
+		},
+	}
+
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString("   "))
+	rq.Header.Set("Authorization", "Bearer good-token")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusBadRequest, rs.StatusCode)
+}
+
+func TestUploadOrder_InvalidOrderNumber(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		uploadOrderFunc: func(ctx context.Context, userID int64, orderNumber string) (model.UploadOrderResult, error) {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, invalidLuhnOrderNumber, orderNumber)
+
+			return model.UploadOrderResult{}, service.ErrInvalidOrderNumber
+		},
+	}
+
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodPost, "/api/user/orders", bytes.NewBufferString(invalidLuhnOrderNumber))
+	rq.Header.Set("Authorization", "Bearer good-token")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnprocessableEntity, rs.StatusCode)
+}
+
+func TestGetOrders_Unauthorized(t *testing.T) {
+	authService := &stubAuthService{}
+	tokenManager := &stubTokenManager{}
+
+	r := New(authService, &stubOrderService{}, &stubBalanceService{}, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestGetOrders_InvalidToken(t *testing.T) {
+	authService := &stubAuthService{}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "bad-token", token)
+			return 0, auth.ErrInvalidToken
+		},
+	}
+
+	r := New(authService, &stubOrderService{}, &stubBalanceService{}, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
+	rq.Header.Set("Authorization", "Bearer bad-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestGetOrders_NoContent(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		listOrdersFunc: func(ctx context.Context, userID int64) ([]model.Order, error) {
+			require.Equal(t, int64(1), userID)
+			return []model.Order{}, nil
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	body, err := io.ReadAll(rs.Body)
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusNoContent, rs.StatusCode)
+	require.Empty(t, body)
+}
+
+func TestGetOrders_OK(t *testing.T) {
+	loc := time.FixedZone("+0300", 3*60*60)
+
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		listOrdersFunc: func(ctx context.Context, userID int64) ([]model.Order, error) {
+			require.Equal(t, int64(1), userID)
+
+			return []model.Order{
+				{
+					ID:         1,
+					Number:     "9278923470",
+					UserID:     1,
+					Status:     model.OrderStatusProcessed,
+					Accrual:    50050, // 500.50 во внешнем API
+					UploadedAt: time.Date(2026, 4, 18, 15, 15, 45, 0, loc),
+				},
+				{
+					ID:         2,
+					Number:     "12345678903",
+					UserID:     1,
+					Status:     model.OrderStatusProcessing,
+					Accrual:    0,
+					UploadedAt: time.Date(2026, 4, 18, 15, 12, 1, 0, loc),
+				},
+				{
+					ID:         3,
+					Number:     "346436439",
+					UserID:     1,
+					Status:     model.OrderStatusInvalid,
+					Accrual:    0,
+					UploadedAt: time.Date(2026, 4, 17, 16, 9, 53, 0, loc),
+				},
+			}, nil
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusOK, rs.StatusCode)
+	require.Equal(t, "application/json", rs.Header.Get("Content-Type"))
+
+	var got []getOrdersResponseItem
+	err := json.NewDecoder(rs.Body).Decode(&got)
+	require.NoError(t, err)
+
+	require.Len(t, got, 3)
+
+	require.Equal(t, "9278923470", got[0].Number)
+	require.Equal(t, "PROCESSED", got[0].Status)
+	require.Equal(t, "2026-04-18T15:15:45+03:00", got[0].UploadedAt)
+	require.NotNil(t, got[0].Accrual)
+	require.InDelta(t, 500.5, *got[0].Accrual, 0.000001)
+
+	require.Equal(t, "12345678903", got[1].Number)
+	require.Equal(t, "PROCESSING", got[1].Status)
+	require.Equal(t, "2026-04-18T15:12:01+03:00", got[1].UploadedAt)
+	require.Nil(t, got[1].Accrual)
+
+	require.Equal(t, "346436439", got[2].Number)
+	require.Equal(t, "INVALID", got[2].Status)
+	require.Equal(t, "2026-04-17T16:09:53+03:00", got[2].UploadedAt)
+	require.Nil(t, got[2].Accrual)
+}
+
+func TestGetOrders_InternalError(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{
+		listOrdersFunc: func(ctx context.Context, userID int64) ([]model.Order, error) {
+			require.Equal(t, int64(1), userID)
+			return nil, errors.New("db failed")
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, &stubBalanceService{}, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusInternalServerError, rs.StatusCode)
+}
+
+func TestGetBalance_Unauthorized(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{}
+	tokenManager := &stubTokenManager{}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/balance", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestGetBalance_InvalidToken(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "bad-token", token)
+			return 0, auth.ErrInvalidToken
+		},
+	}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/balance", nil)
+	rq.Header.Set("Authorization", "Bearer bad-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestGetBalance_OK(t *testing.T) {
+	authService := &stubAuthService{}
+	balanceService := &stubBalanceService{
+		getBalanceFunc: func(ctx context.Context, userID int64) (model.Balance, error) {
+			require.Equal(t, int64(1), userID)
+
+			return model.Balance{
+				Current:   50050,
+				Withdrawn: 4200,
+			}, nil
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, &stubOrderService{}, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/balance", nil)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusOK, rs.StatusCode)
+	require.Equal(t, "application/json", rs.Header.Get("Content-Type"))
+
+	var got getBalanceResponse
+	err := json.NewDecoder(rs.Body).Decode(&got)
+	require.NoError(t, err)
+
+	require.InDelta(t, 500.5, got.Current, 0.000001)
+	require.InDelta(t, 42.0, got.Withdrawn, 0.000001)
+}
+
+func TestGetBalance_InternalError(t *testing.T) {
+	authService := &stubAuthService{}
+	balanceService := &stubBalanceService{
+		getBalanceFunc: func(ctx context.Context, userID int64) (model.Balance, error) {
+			require.Equal(t, int64(1), userID)
+			return model.Balance{}, errors.New("db failed")
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, &stubOrderService{}, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/balance", nil)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusInternalServerError, rs.StatusCode)
+}
+
+func TestWithdraw_Unauthorized(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{}
+	tokenManager := &stubTokenManager{}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user/balance/withdraw",
+		bytes.NewBufferString(`{"order":"2377225624","sum":5.11}`),
+	)
+	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestWithdraw_InvalidToken(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "bad-token", token)
+
+			return 0, auth.ErrInvalidToken
+		},
+	}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user/balance/withdraw",
+		bytes.NewBufferString(`{"order":"2377225624","sum":5.11}`),
+	)
+	rq.Header.Set("Authorization", "Bearer bad-token")
+	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestWithdraw_BadRequest(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user/balance/withdraw",
+		bytes.NewBufferString(`{"order":"2377225624","sum":`),
+	)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusBadRequest, rs.StatusCode)
+}
+
+func TestWithdraw_InvalidOrderNumber(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{
+		withdrawFunc: func(ctx context.Context, userID int64, orderNumber string, sum int64) error {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, invalidLuhnOrderNumber, orderNumber)
+			require.Equal(t, int64(511), sum)
+
+			return service.ErrInvalidWithdrawOrderNumber
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user/balance/withdraw",
+		bytes.NewBufferString(fmt.Sprintf(`{"order":"%s","sum":5.11}`, invalidLuhnOrderNumber)),
+	)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnprocessableEntity, rs.StatusCode)
+}
+
+func TestWithdraw_InsufficientFunds(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{
+		withdrawFunc: func(ctx context.Context, userID int64, orderNumber string, sum int64) error {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, validLuhnOrderNumber, orderNumber)
+			require.Equal(t, int64(511), sum)
+
+			return service.ErrInsufficientFunds
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user/balance/withdraw",
+		bytes.NewBufferString(fmt.Sprintf(`{"order":"%s","sum":5.11}`, validLuhnOrderNumber)),
+	)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusPaymentRequired, rs.StatusCode)
+}
+
+func TestWithdraw_OK(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{
+		withdrawFunc: func(ctx context.Context, userID int64, orderNumber string, sum int64) error {
+			require.Equal(t, int64(1), userID)
+			require.Equal(t, validLuhnOrderNumber, orderNumber)
+			require.Equal(t, int64(511), sum)
+
+			return nil
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user/balance/withdraw",
+		bytes.NewBufferString(fmt.Sprintf(`{"order":"%s","sum":5.11}`, validLuhnOrderNumber)),
+	)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rq.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusOK, rs.StatusCode)
+}
+
+func TestGetWithdrawals_Unauthorized(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{}
+	tokenManager := &stubTokenManager{}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/withdrawals", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestGetWithdrawals_InvalidToken(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "bad-token", token)
+			return 0, auth.ErrInvalidToken
+		},
+	}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/withdrawals", nil)
+	rq.Header.Set("Authorization", "Bearer bad-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusUnauthorized, rs.StatusCode)
+}
+
+func TestGetWithdrawals_NoContent(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{
+		listWithdrawalsFunc: func(ctx context.Context, userID int64) ([]model.Withdrawal, error) {
+			require.Equal(t, int64(1), userID)
+			return []model.Withdrawal{}, nil
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/withdrawals", nil)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	body, err := io.ReadAll(rs.Body)
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusNoContent, rs.StatusCode)
+	require.Empty(t, body)
+}
+
+func TestGetWithdrawals_OK(t *testing.T) {
+	loc := time.FixedZone("+0300", 3*60*60)
+
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{
+		listWithdrawalsFunc: func(ctx context.Context, userID int64) ([]model.Withdrawal, error) {
+			require.Equal(t, int64(1), userID)
+
+			return []model.Withdrawal{
+				{
+					ID:          1,
+					UserID:      1,
+					OrderNumber: "9278923470",
+					Sum:         51100,
+					ProcessedAt: time.Date(2026, 4, 18, 15, 15, 45, 0, loc),
+				},
+				{
+					ID:          2,
+					UserID:      1,
+					OrderNumber: "12345678903",
+					Sum:         7500,
+					ProcessedAt: time.Date(2026, 4, 17, 16, 9, 57, 0, loc),
+				},
+			}, nil
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/withdrawals", nil)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusOK, rs.StatusCode)
+	require.Equal(t, "application/json", rs.Header.Get("Content-Type"))
+
+	var got []getWithdrawalsResponseItem
+	err := json.NewDecoder(rs.Body).Decode(&got)
+	require.NoError(t, err)
+
+	require.Len(t, got, 2)
+
+	require.Equal(t, "9278923470", got[0].Order)
+	require.InDelta(t, 511.0, got[0].Sum, 0.000001)
+	require.Equal(t, "2026-04-18T15:15:45+03:00", got[0].ProcessedAt)
+
+	require.Equal(t, "12345678903", got[1].Order)
+	require.InDelta(t, 75.0, got[1].Sum, 0.000001)
+	require.Equal(t, "2026-04-17T16:09:57+03:00", got[1].ProcessedAt)
+}
+
+func TestGetWithdrawals_InternalError(t *testing.T) {
+	authService := &stubAuthService{}
+	orderService := &stubOrderService{}
+	balanceService := &stubBalanceService{
+		listWithdrawalsFunc: func(ctx context.Context, userID int64) ([]model.Withdrawal, error) {
+			require.Equal(t, int64(1), userID)
+			return nil, errors.New("db failed")
+		},
+	}
+	tokenManager := &stubTokenManager{
+		parseFunc: func(token string) (int64, error) {
+			require.Equal(t, "good-token", token)
+			return 1, nil
+		},
+	}
+
+	r := New(authService, orderService, balanceService, tokenManager, zap.NewNop())
+
+	rq := httptest.NewRequest(http.MethodGet, "/api/user/withdrawals", nil)
+	rq.Header.Set("Authorization", "Bearer good-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, rq)
+
+	rs := rec.Result()
+	t.Cleanup(func() {
+		require.NoError(t, rs.Body.Close())
+	})
+
+	require.Equal(t, http.StatusInternalServerError, rs.StatusCode)
+}

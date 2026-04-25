@@ -1,0 +1,16 @@
+# Binaries
+cmd/gophermart/gophermart
+
+# IDEs directories
+.vscode
+
+#macOS
+.DS_Store
+__MACOSX/
+
+# build artifacts
+coverage.out
+
+# Git metadata and CI config
+.git
+.github
