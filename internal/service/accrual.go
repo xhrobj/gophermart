@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	pendingOrdersSize  = 10
+	pendingOrdersSize  = 100
 	accrualWorkerCount = 3
 	nextPollDelay      = time.Second * 30
 	defaultRetryAfter  = time.Second * 60
@@ -76,10 +76,7 @@ func (s *accrualService) ProcessPendingOrders(ctx context.Context) error {
 
 	var wg sync.WaitGroup
 
-	workerCount := accrualWorkerCount
-	if len(orders) < workerCount {
-		workerCount = len(orders)
-	}
+	workerCount := min(len(orders), accrualWorkerCount)
 
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
@@ -165,7 +162,7 @@ func (s *accrualService) processPendingOrder(ctx context.Context, order model.Or
 			s.setRateLimit(time.Now().UTC(), retryAfter)
 
 			s.logger.Warn(
-				"(-_-)Zzz accrual rate limit exceeded",
+				"(-_-)Zzz accrual rate limit received; pause polling",
 				zap.String("order_number", order.Number),
 				zap.Duration("retry_after", retryAfter),
 			)
