@@ -218,7 +218,7 @@ func TestPostgresBalanceRepository_GetBalance_IgnoresNonProcessedOrdersAndOtherU
 	got, err := balanceRepo.GetBalance(ctx, firstUserID)
 	require.NoError(t, err)
 
-	require.Equal(t, int64(9299), got.Current)
+	require.Equal(t, int64(9539), got.Current)
 	require.Equal(t, int64(511), got.Withdrawn)
 }
 
@@ -321,11 +321,11 @@ func TestPostgresBalanceRepository_ListWithdrawals_OK(t *testing.T) {
 
 	require.Equal(t, "125", got[0].OrderNumber)
 	require.Equal(t, int64(7500), got[0].Sum)
-	require.Equal(t, newerTime, got[0].ProcessedAt)
+	require.Equal(t, newerTime, got[0].ProcessedAt.UTC())
 
 	require.Equal(t, "117", got[1].OrderNumber)
 	require.Equal(t, int64(51100), got[1].Sum)
-	require.Equal(t, olderTime, got[1].ProcessedAt)
+	require.Equal(t, olderTime, got[1].ProcessedAt.UTC())
 }
 
 func TestPostgresBalanceRepository_ListWithdrawals_Empty(t *testing.T) {

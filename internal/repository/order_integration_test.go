@@ -146,13 +146,13 @@ func TestPostgresOrderRepository_ListByUserID_OK(t *testing.T) {
 	require.Equal(t, firstUserID, got[0].UserID)
 	require.Equal(t, "PROCESSED", string(got[0].Status))
 	require.Equal(t, int64(50050), got[0].Accrual)
-	require.Equal(t, newerTime, got[0].UploadedAt)
+	require.Equal(t, newerTime, got[0].UploadedAt.UTC())
 
 	require.Equal(t, "109", got[1].Number)
 	require.Equal(t, firstUserID, got[1].UserID)
 	require.Equal(t, "NEW", string(got[1].Status))
 	require.Equal(t, int64(0), got[1].Accrual)
-	require.Equal(t, olderTime, got[1].UploadedAt)
+	require.Equal(t, olderTime, got[1].UploadedAt.UTC())
 }
 
 func TestPostgresOrderRepository_ListByUserID_Empty(t *testing.T) {

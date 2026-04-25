@@ -156,6 +156,7 @@ make lint
 - `make test-race` - запустить тесты с race detector
 - `make test-integration` - запустить интеграционные тесты репозиториев
 - `make test-coverage` - собрать покрытие
+- `make test-coverage-integration` - собрать покрытие с учетом интеграционных тестов репозиториев
 - `make lint` - запустить golangci-lint
 
 Команды для локального PostgreSQL:

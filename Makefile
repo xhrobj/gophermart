@@ -1,7 +1,7 @@
-.PHONY: run \
-		run-dev run-dev-down run-dev-logs \
+.PHONY: run-dev run-dev-down run-dev-logs \
+		run \
 		build clean \
-		test test-race test-integration test-coverage \
+		test test-race test-integration test-coverage test-coverage-integration \
 		lint \
 		postgres-up postgres-start postgres-stop postgres-rm postgres-connect
 
@@ -17,12 +17,6 @@ ACCRUAL_SYSTEM_ADDRESS=
 
 APP_PATH=cmd/gophermart/gophermart
 
-run: build
-	./$(APP_PATH) \
-		-a $(RUN_ADDRESS) \
-		-d "$(POSTGRES_DSN)" \
-		-r "$(ACCRUAL_SYSTEM_ADDRESS)"
-
 run-dev:
 	docker compose up --build
 
@@ -31,6 +25,12 @@ run-dev-down:
 
 run-dev-logs:
 	docker compose logs -f
+
+run: build
+	./$(APP_PATH) \
+		-a $(RUN_ADDRESS) \
+		-d "$(POSTGRES_DSN)" \
+		-r "$(ACCRUAL_SYSTEM_ADDRESS)"
 
 build:
 	go build -o $(APP_PATH) ./cmd/gophermart
@@ -49,6 +49,9 @@ test-integration:
 
 test-coverage:
 	go test -covermode=atomic -coverprofile=coverage.out ./...
+
+test-coverage-integration:
+	go test -tags=integration -covermode=atomic -coverprofile=coverage.out ./...
 
 lint:
 	golangci-lint run
