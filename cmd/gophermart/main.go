@@ -2,9 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/xhrobj/gophermart/internal/accrual"
@@ -20,6 +25,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const shutdownTimeout = time.Second * 10
+
 func main() {
 	if err := run(); err != nil {
 		log.Fatal(err)
@@ -27,7 +34,11 @@ func main() {
 }
 
 func run() error {
-	ctx := context.Background()
+	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	ctx, cancel := context.WithCancel(signalCtx)
+	defer cancel()
 
 	lg, err := logger.New()
 	if err != nil {
@@ -61,6 +72,12 @@ func run() error {
 	orderService := service.NewOrderService(orderRepo)
 
 	var accrualWorker *worker.AccrualWorker
+	var workersWG sync.WaitGroup
+
+	defer func() {
+		cancel()
+		workersWG.Wait()
+	}()
 
 	if cfg.AccrualSystemAddress == "" {
 		lg.Info("accrual system address is empty")
@@ -75,7 +92,12 @@ func run() error {
 	}
 
 	if accrualWorker != nil {
-		go accrualWorker.Run(ctx)
+		workersWG.Add(1)
+
+		go func() {
+			defer workersWG.Done()
+			accrualWorker.Run(ctx)
+		}()
 	}
 
 	echoBanner()
@@ -90,7 +112,7 @@ func run() error {
 
 	appRouter := router.New(authService, orderService, balanceService, tokenManager, lg)
 
-	lg.Info("(^.^)~ Gophermart is starting HTTP server",
+	lg.Info("(^.^)~ Gophermart is starting HTTP server ...",
 		zap.String("address", cfg.RunAddress),
 	)
 
@@ -100,7 +122,45 @@ func run() error {
 		ReadHeaderTimeout: time.Second * 5,
 	}
 
-	return server.ListenAndServe()
+	serverErrCh := make(chan error, 1)
+
+	go func() {
+		err := server.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErrCh <- err
+			return
+		}
+
+		serverErrCh <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		stop()
+
+		lg.Info("(^.^)~ Gophermart is shutting down ...")
+
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer shutdownCancel()
+
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("shutdown HTTP server: %w", err)
+		}
+
+		if err := <-serverErrCh; err != nil {
+			return fmt.Errorf("run HTTP server: %w", err)
+		}
+
+		lg.Info("HTTP server stopped")
+		return nil
+
+	case err := <-serverErrCh:
+		if err != nil {
+			return fmt.Errorf("run HTTP server: %w", err)
+		}
+
+		return nil
+	}
 }
 
 func echoBanner() {

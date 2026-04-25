@@ -2,17 +2,20 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/xhrobj/gophermart/internal/service"
 	"go.uber.org/zap"
 )
 
+// AccrualWorker периодически запускает обработку заказов через внешний сервис accrual.
 type AccrualWorker struct {
 	accrualService service.AccrualService
 	logger         *zap.Logger
 }
 
+// NewAccrualWorker создаёт worker для периодического polling заказов в accrual.
 func NewAccrualWorker(
 	accrualService service.AccrualService,
 	logger *zap.Logger,
@@ -53,7 +56,13 @@ func (w *AccrualWorker) runOnce(ctx context.Context) {
 	}
 
 	err := w.accrualService.ProcessPendingOrders(ctx)
-	if err != nil {
-		w.logger.Warn(" *** accrual worker run once failed", zap.Error(err))
+	if err == nil {
+		return
 	}
+
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return
+	}
+
+	w.logger.Warn(" *** accrual worker run once failed", zap.Error(err))
 }
