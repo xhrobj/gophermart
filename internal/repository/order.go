@@ -223,6 +223,10 @@ func (r *PostgresOrderRepository) ListPending(ctx context.Context, limit int) ([
 	return orders, nil
 }
 
+// SetAccrualResult сохраняет результат проверки заказа во внешнем сервисе начислений.
+//
+// Метод обновляет статус заказа, сумму начислений и время следующего опроса.
+// Если заказ с указанным номером не найден, метод возвращает ErrOrderNotFound.
 func (r *PostgresOrderRepository) SetAccrualResult(ctx context.Context, orderNumber string, update OrderAccrualUpdate) error {
 	const query = `
 		UPDATE orders
