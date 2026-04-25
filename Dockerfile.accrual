@@ -2,9 +2,12 @@ FROM debian:bookworm-slim
 
 WORKDIR /app
 
-COPY cmd/accrual/accrual_linux_amd64 /app/accrual
+RUN useradd --system --no-create-home --uid 10001 appuser
 
-RUN chmod +x /app/accrual
+COPY cmd/accrual/accrual_linux_amd64 /app/accrual
+RUN chmod 0555 /app/accrual
+
+USER appuser
 
 EXPOSE 8080
 
