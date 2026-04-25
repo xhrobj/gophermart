@@ -20,6 +20,7 @@ var (
 	ErrOrderAlreadyExists = errors.New("order already exists")
 )
 
+// OrderAccrualUpdate описывает данные для обновления результата проверки заказа в accrual.
 type OrderAccrualUpdate struct {
 	Status     model.OrderStatus
 	Accrual    int64

@@ -9,6 +9,7 @@ import (
 	"github.com/xhrobj/gophermart/internal/model"
 )
 
+// ErrInsufficientFunds означает, что на бонусном счете недостаточно средств для списания.
 var ErrInsufficientFunds = errors.New("insufficient funds")
 
 // BalanceRepository описывает операции хранения баланса и списаний.
