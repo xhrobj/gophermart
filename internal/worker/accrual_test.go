@@ -38,6 +38,7 @@ func TestNewAccrualWorker_NilLogger(t *testing.T) {
 
 func TestAccrualWorker_Run_ProcessPendingOrdersOnceAndStops(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	calls := 0
 	accrualService := &stubAccrualService{
