@@ -25,5 +25,5 @@ type AccrualResult struct {
 	Status AccrualStatus
 
 	// Accrual содержит сумму начисления в копейках.
-	Accrual int64 // ???: *int64
+	Accrual int64
 }

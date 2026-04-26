@@ -13,5 +13,5 @@ type User struct {
 // AuthResult содержит результат успешной регистрации или аутентификации.
 type AuthResult struct {
 	UserID int64
-	Token  string // ???: кто будет генерить токен сервис или handler/middleware?
+	Token  string
 }
