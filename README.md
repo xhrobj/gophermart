@@ -1,6 +1,6 @@
 # (^.^)~ Gophermart
 
-[![(-_-) GO CI](https://github.com/xhrobj/gophermart/actions/workflows/go-ci.yml/badge.svg?branch=feature%2Fgophermart)](https://github.com/xhrobj/gophermart/actions/workflows/go-ci.yml) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_gophermart&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=xhrobj_gophermart)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_gophermart&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=xhrobj_gophermart) [![(-_-) GO CI](https://github.com/xhrobj/gophermart/actions/workflows/go-ci.yml/badge.svg?branch=feature%2Fgophermart)](https://github.com/xhrobj/gophermart/actions/workflows/go-ci.yml)
 
 ```text
   ________              .__                                        __   
