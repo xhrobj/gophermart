@@ -48,7 +48,10 @@ func run() error {
 		_ = lg.Sync()
 	}()
 
-	cfg := config.GetConfig()
+	cfg, err := config.Parse(os.Args[1:])
+	if err != nil {
+		return fmt.Errorf("parse config: %w", err)
+	}
 
 	db, err := database.Open(ctx, cfg.DatabaseDSN)
 	if err != nil {

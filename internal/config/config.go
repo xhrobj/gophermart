@@ -20,7 +20,7 @@ type Config struct {
 	JWTSecret string
 }
 
-// GetConfig возвращает конфигурацию сервиса Gophermart.
+// Parse возвращает конфигурацию сервиса Gophermart.
 //
 // Значения параметров могут быть заданы через:
 //   - флаги: -a -d -r
@@ -29,7 +29,7 @@ type Config struct {
 // Приоритет источников:
 //   - для RunAddress, DatabaseDSN и AccrualSystemAddress: flag > env > default
 //   - для JWTSecret: env > default
-func GetConfig() Config {
+func Parse(args []string) (Config, error) {
 	cfg := Config{
 		RunAddress:           "localhost:8080",
 		DatabaseDSN:          "",
@@ -37,40 +37,31 @@ func GetConfig() Config {
 		JWTSecret:            "dev-secret",
 	}
 
+	if runAddress, ok := os.LookupEnv("RUN_ADDRESS"); ok {
+		cfg.RunAddress = runAddress
+	}
+
+	if databaseURI, ok := os.LookupEnv("DATABASE_URI"); ok {
+		cfg.DatabaseDSN = databaseURI
+	}
+
+	if accrualSystemAddress, ok := os.LookupEnv("ACCRUAL_SYSTEM_ADDRESS"); ok {
+		cfg.AccrualSystemAddress = accrualSystemAddress
+	}
+
+	if jwtSecret := os.Getenv("JWT_SECRET"); jwtSecret != "" {
+		cfg.JWTSecret = jwtSecret
+	}
+
+	flags := flag.NewFlagSet("gophermart", flag.ContinueOnError)
+
 	flag.StringVar(&cfg.RunAddress, "a", cfg.RunAddress, "address and port to run server")
 	flag.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "database connection string")
 	flag.StringVar(&cfg.AccrualSystemAddress, "r", cfg.AccrualSystemAddress, "accrual system address")
 
-	flag.Parse()
-
-	definedFlags := make(map[string]bool)
-
-	flag.Visit(func(f *flag.Flag) {
-		definedFlags[f.Name] = true
-	})
-
-	if !definedFlags["a"] {
-		if runAddress, ok := os.LookupEnv("RUN_ADDRESS"); ok {
-			cfg.RunAddress = runAddress
-		}
+	if err := flags.Parse(args); err != nil {
+		return Config{}, err
 	}
 
-	if !definedFlags["d"] {
-		if databaseURI, ok := os.LookupEnv("DATABASE_URI"); ok {
-			cfg.DatabaseDSN = databaseURI
-		}
-	}
-
-	if !definedFlags["r"] {
-		if accrualSystemAddress, ok := os.LookupEnv("ACCRUAL_SYSTEM_ADDRESS"); ok {
-			cfg.AccrualSystemAddress = accrualSystemAddress
-		}
-	}
-
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret != "" {
-		cfg.JWTSecret = jwtSecret
-	}
-
-	return cfg
+	return cfg, nil
 }
