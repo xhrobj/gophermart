@@ -67,16 +67,7 @@ func (r *PostgresOrderRepository) Create(ctx context.Context, userID int64, orde
 		RETURNING id, number, user_id, status, accrual, uploaded_at
 	`
 
-	var order model.Order
-
-	err := r.db.QueryRowContext(ctx, query, orderNumber, userID).Scan(
-		&order.ID,
-		&order.Number,
-		&order.UserID,
-		&order.Status,
-		&order.Accrual,
-		&order.UploadedAt,
-	)
+	order, err := scanOrder(r.db.QueryRowContext(ctx, query, orderNumber, userID))
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
@@ -99,16 +90,7 @@ func (r *PostgresOrderRepository) FindByNumber(ctx context.Context, orderNumber 
 		WHERE number = $1
 	`
 
-	var order model.Order
-
-	err := r.db.QueryRowContext(ctx, query, orderNumber).Scan(
-		&order.ID,
-		&order.Number,
-		&order.UserID,
-		&order.Status,
-		&order.Accrual,
-		&order.UploadedAt,
-	)
+	order, err := scanOrder(r.db.QueryRowContext(ctx, query, orderNumber))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return model.Order{}, ErrOrderNotFound
@@ -120,9 +102,7 @@ func (r *PostgresOrderRepository) FindByNumber(ctx context.Context, orderNumber 
 	return order, nil
 }
 
-// ListByUserID возвращает список заказов пользователя
-//
-// в обратном хронологическом порядке.
+// ListByUserID возвращает список заказов пользователя в обратном хронологическом порядке.
 func (r *PostgresOrderRepository) ListByUserID(ctx context.Context, userID int64) ([]model.Order, error) {
 	const query = `
 		SELECT
@@ -141,38 +121,17 @@ func (r *PostgresOrderRepository) ListByUserID(ctx context.Context, userID int64
 	if err != nil {
 		return nil, fmt.Errorf("list orders by user id: %w", err)
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
 
-	orders := make([]model.Order, 0)
-
-	for rows.Next() {
-		var order model.Order
-
-		err = rows.Scan(
-			&order.ID,
-			&order.Number,
-			&order.UserID,
-			&order.Status,
-			&order.Accrual,
-			&order.UploadedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("scan order row: %w", err)
-		}
-
-		orders = append(orders, order)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate order rows: %w", err)
+	orders, err := scanRows(rows, scanOrder)
+	if err != nil {
+		return nil, fmt.Errorf("list orders by user id: %w", err)
 	}
 
 	return orders, nil
 }
 
-// выбирает NEW и PROCESSING только с next_poll_at <= now
+// ListPending возвращает заказы со статусом NEW или PROCESSING,
+// у которых наступило время следующего опроса внешнего сервиса начислений.
 func (r *PostgresOrderRepository) ListPending(ctx context.Context, limit int) ([]model.Order, error) {
 	const query = `
 		SELECT
@@ -193,32 +152,10 @@ func (r *PostgresOrderRepository) ListPending(ctx context.Context, limit int) ([
 	if err != nil {
 		return nil, fmt.Errorf("list pending orders: %w", err)
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
 
-	orders := make([]model.Order, 0, limit)
-
-	for rows.Next() {
-		var order model.Order
-
-		err = rows.Scan(
-			&order.ID,
-			&order.Number,
-			&order.UserID,
-			&order.Status,
-			&order.Accrual,
-			&order.UploadedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("scan pending order row: %w", err)
-		}
-
-		orders = append(orders, order)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate pending order rows: %w", err)
+	orders, err := scanRows(rows, scanOrder)
+	if err != nil {
+		return nil, fmt.Errorf("list pending orders: %w", err)
 	}
 
 	return orders, nil
@@ -260,4 +197,49 @@ func (r *PostgresOrderRepository) SetAccrualResult(ctx context.Context, orderNum
 	}
 
 	return nil
+}
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanRows[T any](rows *sql.Rows, scan func(rowScanner) (T, error)) ([]T, error) {
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	items := make([]T, 0)
+
+	for rows.Next() {
+		item, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate rows: %w", err)
+	}
+
+	return items, nil
+}
+
+func scanOrder(scanner rowScanner) (model.Order, error) {
+	var order model.Order
+
+	err := scanner.Scan(
+		&order.ID,
+		&order.Number,
+		&order.UserID,
+		&order.Status,
+		&order.Accrual,
+		&order.UploadedAt,
+	)
+	if err != nil {
+		return model.Order{}, fmt.Errorf("scan order row: %w", err)
+	}
+
+	return order, nil
 }
