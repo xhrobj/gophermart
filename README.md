@@ -1,25 +1,98 @@
-# go-musthave-diploma-tpl
+# (^.^)~ Gophermart
 
-Шаблон репозитория для индивидуального дипломного проекта курса «Go-разработчик»
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_gophermart&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=xhrobj_gophermart) [![(-_-) GO CI](https://github.com/xhrobj/gophermart/actions/workflows/go-ci.yml/badge.svg?branch=feature%2Fgophermart)](https://github.com/xhrobj/gophermart/actions/workflows/go-ci.yml)
 
-# Начало работы
-
-1. Склонируйте репозиторий в любую подходящую директорию на вашем компьютере.
-2. В корне репозитория выполните команду `go mod init <name>` (где `<name>` — адрес вашего репозитория на GitHub без
-   префикса `https://`) для создания модуля
-
-# Обновление шаблона
-
-Чтобы иметь возможность получать обновления автотестов и других частей шаблона, выполните команду:
-
-```
-git remote add -m master template https://github.com/yandex-praktikum/go-musthave-diploma-tpl.git
+```text
+  ________              .__                                        __   
+ /  _____/  ____ ______ |  |__   ___________  _____ _____ ________/  |_ 
+/   \  ___ /  _ \\____ \|  |  \_/ __ \_  __ \/     \\__  \\_  __ \   __\
+\    \_\  (  <_> )  |_> >   Y  \  ___/|  | \/  Y Y  \/ __ \|  | \/|  |
+ \______  /\____/|   __/|___|  /\___  >__|  |__|_|  (____  /__|   |__|
+        \/       |__|        \/     \/            \/     \/
 ```
 
-Для обновления кода автотестов выполните команду:
+**Gophermart — накопительная система лояльности для интернет-магазина.**
 
-```
-git fetch template && git checkout template/master .github
+## Локальный запуск
+
+Локально проект можно запускать как в backend-only режиме, так и в полном режиме через Docker Compose: PostgreSQL + Gophermart API + accrual + web-клиент.
+
+## Локальный запуск через Docker Compose
+
+Поднять Gophermart API, PostgreSQL, accrual и web-клиент:
+
+```bash
+make
 ```
 
-Затем добавьте полученные изменения в свой репозиторий.
+или ```make run-dev```
+
+После старта будет доступен:
+
+- Frontend Gophermart Client: `http://localhost:3000`
+
+<p align="center">
+  <img src="docs/readme/gophermart-client.png" alt="Gophermart Client" width="1100">
+</p>
+
+Также будут доступны:
+
+- Backend API: `http://localhost:8080`
+- Accrual API: `http://localhost:8081`
+- PostgreSQL: `localhost:5432`
+
+Остановить окружение:
+
+```bash
+make run-dev-down
+```
+
+Посмотреть логи:
+
+```bash
+make run-dev-logs
+```
+
+> В `docker-compose.yml` backend запускается с `RUN_ADDRESS=:8080`, чтобы API было доступно с хоста. База данных сохраняется в Docker volume.
+>
+> `accrual` поднимается отдельным контейнером и доступен для `gophermart` внутри compose-сети по адресу `http://accrual:8080`, а с хоста - по адресу `http://localhost:8081`.
+>
+> Web-клиент поднимается отдельным контейнером и проксирует запросы в backend через `GOPHERMART_UPSTREAM=http://gophermart:8080`.
+
+## Полный локальный сценарий
+
+Для быстрого ручного прогона удобно использовать Docker Compose.
+
+Перед началом убедитесь, что Docker запущен, и поднимите локальное окружение:
+
+```bash
+make run-dev
+```
+
+После запуска:
+
+1. Открыть клиент: `http://localhost:3000`
+2. Зарегистрировать пользователя и выполнить вход
+3. Подготовить заказ или заказы во внешнем сервисе accrual через тестовую панель
+4. Зарегистрировать заказ в Gophermart
+5. Дождаться фоновой обработки
+6. Проверить список заказов и баланс
+7. Выполнить списание баллов
+8. Проверить историю списаний
+
+## Локальная разработка
+
+Подробная инструкция по локальной разработке, curl-примеры, конфигурация и Makefile-команды описаны в [docs/local-dev.md](docs/local-dev.md)
+
+## Особенности реализации
+
+> Момент, который выглядит как бизнес-недоработка: если пользователь ошибётся при вводе номера заказа и отправит номер, который корректен по алгоритму Луна, но которого нет (и не будет) во внешнем `accrual`, такой заказ в текущей модели будет опрашиваться бесконечно долго - `gophermart` будет "вечно", с определённой периодичностью, запрашивать его статус в надежде, что он появится во внешней системе.
+
+## Предыстория
+
+Владельцы одного интернет-магазина хотят ввести скидки для постоянных покупателей и систему накопления баллов, которыми можно расплачиваться. Соответственно, нужны разработчики. Возьмёте заказ?
+
+Техническое задание - см. [SPECIFICATION.md](SPECIFICATION.md)
+
+Шаблон репозитория для индивидуального первого дипломного проекта курса «Go-разработчик»:
+[go-musthave-diploma-tpl](https://github.com/yandex-praktikum/go-musthave-diploma-tpl)

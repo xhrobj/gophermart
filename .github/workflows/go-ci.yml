@@ -1,0 +1,71 @@
+name: (-_-) GO CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go-ci:
+    name: Quality checks -> lint, build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gophermart
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: gophermart_test
+        options: >-
+          --health-cmd "pg_isready -U gophermart -d gophermart_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      TEST_DATABASE_DSN: postgres://gophermart:secret@localhost:5432/gophermart_test?sslmode=disable
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: (^_^) Run golangci-lint
+        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
+        with:
+          version: v2.11
+
+      - name: (^_^) Build gophermart
+        run: make build
+
+      - name: (^_^) Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: (^_^) Apply test database migrations
+        run: psql "$TEST_DATABASE_DSN" -v ON_ERROR_STOP=1 -f migrations/001_init.up.sql
+
+      - name: (^_^) Run tests with coverage
+        run: make test-coverage-integration
+
+      - name: (^_^) Run race tests
+        run: make test-race
+
+      - name: (^_^) SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

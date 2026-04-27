@@ -12,12 +12,17 @@
 *.out
 
 # Binaries
-cmd/gophermart/main
 cmd/gophermart/gophermart
 
 # Dependency directories (remove the comment below to include it)
 vendor/
 
 # IDEs directories
-.idea
 .vscode
+
+#macOS
+.DS_Store
+__MACOSX/
+
+# build artifacts
+coverage.out
